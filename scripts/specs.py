@@ -28,6 +28,8 @@ wcs = create_wcs(
 ra_range = [125, 175]
 dec_range = [-10.1, 5]
 
+window_name = "boxcar"
+
 # dndz_data = np.load("LRG_dndz.npz")
 dndz_data = np.load("LRGELG_dndz.npz")
 z_bin = dndz_data["z_bin"]

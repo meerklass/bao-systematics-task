@@ -1,3 +1,5 @@
+import sys
+import os
 from multiprocessing import Pool
 
 import astropy.constants as c
@@ -12,15 +14,27 @@ from meer21cm.telescope import dish_beam_sigma
 from meer21cm import MockSimulation
 from meer21cm.plot import plot_map
 from meer21cm.util import create_wcs, redshift_to_freq
+from meer21cm.power import get_shot_noise_galaxy
+from meer21cm.grid import shot_noise_correction_from_gridding
 
 from specs import *
 
-window_name = "boxcar"
 
 NU_MHZ = np.array([565.2928416485901, 578.3080260303688, 585.6832971800434, 591.7570498915401, 606.5075921908893, 616.9197396963124, 626.4642082429501, 631.236442516269, 643.3839479392625, 646.4208242950108, 654.2299349240781, 665.5097613882863, 677.6572668112798, 690.2386117136659, 704.5553145336225, 720.1735357917571, 738.82863340564, 751.8438177874186, 755.3145336225597, 768.763557483731, 791.7570498915402, 802.1691973969631, 820.824295010846, 837.7440347071583, 847.2885032537961, 859.002169197397, 868.5466377440348, 873.7527114967462, 884.1648590021691, 892.407809110629, 911.062906724512, 923.644251626898, 933.1887201735358, 960.9544468546637, 983.5140997830803, 996.9631236442517, 1011.7136659436009, 1030.3687635574838, 1047.288503253796, 1055.0976138828632, 1060.303687635575])
 
 TSYS_OVER_ETA_K = np.array([36.75302245250432, 35.673575129533674, 34.98272884283247, 33.773747841105354, 33.1692573402418, 32.65112262521589, 32.089810017271155, 31.528497409326427, 31.355785837651123, 30.362694300518136, 29.32642487046632, 30.40587219343696, 29.585492227979273, 29.02417962003454, 27.858376511226254, 27.5993091537133, 27.08117443868739, 25.094991364421418, 26.260794473229705, 25.9153713298791, 25.310880829015545, 23.97236614853195, 23.97236614853195, 22.979274611398964, 23.238341968911918, 22.461139896373055, 21.8566493955095, 21.33851468048359, 19.8272884283247, 22.202072538860104, 21.8566493955095, 21.986183074265977, 21.07944732297064, 20.77720207253886, 20.129533678756477, 19.654576856649395, 19.870466321243523, 20.08635578583765, 21.511226252158895, 23.324697754749568, 28.808290155440414])
 
+
+# Setup logger
+import logging
+from time import time
+logger = logging.getLogger(__name__)
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(
+    logging.Formatter("[%(levelname)s] %(message)s")
+)
+logger.addHandler(handler)
+logger.setLevel(logging.DEBUG)
 
 def add_boundary_knots(spline):
     """
@@ -72,6 +86,8 @@ def sigma_N(ps):
 
 
 def get_power(seed):
+    logger.debug(f"seed {seed}")
+
     z_func = interp1d(
         z_cen, z_count / dV_arr, kind="linear", bounds_error=False, fill_value=0
     )
@@ -85,8 +101,8 @@ def get_power(seed):
         nu=nu_arr,
         discrete_source_dndz=z_func,
         seed=seed,
-        tracer_bias_2=1.0, # Compute power spectrum in units of b_1 b_2 etc.
-        tracer_bias_1=1.0,
+        tracer_bias_2=1.5, # Compute power spectrum in units of b_1 b_2 etc.
+        tracer_bias_1=1.5,
         mean_amp_1="average_hi_temp",
         omega_hi=5e-4,
         # sigma_beam_ch=sigma_beam_ch,
@@ -138,7 +154,14 @@ def get_power(seed):
     mock.apply_taper_to_field(2, axis=[0, 1, 2])
 
     phi_3d = mock.auto_power_3d_1
-    pgal_3d = mock.auto_power_3d_2
+
+    shot_noise = get_shot_noise_galaxy(
+            gamap_rg,
+            mock.box_len,
+            mock.weights_grid_2,
+            mock.weights_field_2,
+        ) * shot_noise_correction_from_gridding(mock.box_ndim, mock.grid_scheme)
+    pgal_3d = mock.auto_power_3d_2 - shot_noise
     phixgal_3d = mock.cross_power_3d
 
     mock.data = noise_realisation.value
@@ -158,17 +181,28 @@ def get_power(seed):
 
 if __name__ == "__main__":
     # run the simulations
-    Nreal = 4
+    n_cpus = int(os.environ.get("SLURM_CPUS_PER_TASK", 1)) # Assumes that Slurm is used for tasking
+    logger.info(f"Number of cpus used = {n_cpus}")
+
+    scaling = 2
+    os.environ["OMP_NUM_THREADS"] = str(scaling)
+    squeezed_cpus = int(n_cpus//scaling)
+
+    Nreal = 500
+    logger.info(f"Number of realisations = {Nreal}")
 
     phi_arr, pgal_arr, phixgal_arr = [], [], []
     pnoise_arr, pnoisexgal_arr = [], []
-    with Pool(16) as p:
+
+    tstart = time()
+    with Pool(squeezed_cpus) as p:
         for kmode, phi, pgal, phixgal, pnoise, pnoisexgal in p.map(get_power, range(Nreal)):
             phi_arr.append(phi)
             pgal_arr.append(pgal)
             phixgal_arr.append(phixgal)
             pnoise_arr.append(pnoise)
             pnoisexgal_arr.append(pnoisexgal)
+    logger.info(f"Time for compleation with scale={scaling}: {time()-tstart}")
 
     phi_arr = np.array(phi_arr)
     pgal_arr = np.array(pgal_arr)
@@ -177,7 +211,7 @@ if __name__ == "__main__":
     pnoisexgal_arr = np.array(pnoisexgal_arr)
 
     np.savez(
-        "data/powerspectra_few.npz",
+        "../data/powerspectra.npz",
         kmode=kmode,
         phi=phi_arr,
         pgal=pgal_arr,
