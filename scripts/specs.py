@@ -131,8 +131,3 @@ def plot_1d_power(
     axes[1].set_ylim(ratio_min, ratio_max)
     axes[1].legend()
     return fig
-
-##################
-# util Functions #
-##################
-
