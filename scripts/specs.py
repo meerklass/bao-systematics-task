@@ -1,12 +1,14 @@
 # specifications for the simulation
 import numpy as np
 import matplotlib.pyplot as plt
-from meer21cm.util import create_wcs, redshift_to_freq
+from meer21cm.util import create_wcs, redshift_to_freq, freq_to_redshift
 from astropy.cosmology import Planck18
 import astropy.units as u
 
 from scipy.interpolate import CubicSpline
 from utils import add_boundary_knots
+
+from meer21cm.telescope import dish_beam_sigma
 
 num_pix_x = 120
 num_pix_y = 40
@@ -20,6 +22,7 @@ nu_max = redshift_to_freq(z_min)
 nu_resol = 132812.5
 num_ch = int((nu_max - nu_min) / nu_resol)
 nu_arr = np.linspace(nu_min, nu_min + (num_ch - 1) * nu_resol, num_ch)
+z_ch = freq_to_redshift(nu_arr)
 
 wcs = create_wcs(
     ra_cr=150,
@@ -48,6 +51,15 @@ n_gal = 771875 / 4 / 1e9  # Mpc-3
 k1dbins = np.linspace(0.003, 0.2, 25)[1:]
 kperpbins = np.linspace(0, 0.048, 17)[2:]
 kparabins = np.linspace(0, 0.5, 51)
+
+#######################
+# Detector Resolution #
+#######################
+
+_sigma_beam_ch = dish_beam_sigma(13.5, nu_arr)
+_comov_dist = Planck18.comoving_distance(z_ch).value
+sigma_beam_new = 1 / _comov_dist * _sigma_beam_ch
+sigma_beam_new *= _sigma_beam_ch.mean() / sigma_beam_new.mean()
 
 
 ##################
