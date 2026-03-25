@@ -1,9 +1,12 @@
 # specifications for the simulation
 import numpy as np
 import matplotlib.pyplot as plt
-from meer21cm.plot import plot_map
 from meer21cm.util import create_wcs, redshift_to_freq
 from astropy.cosmology import Planck18
+import astropy.units as u
+
+from scipy.interpolate import CubicSpline
+from utils import add_boundary_knots
 
 num_pix_x = 120
 num_pix_y = 40
@@ -28,7 +31,7 @@ wcs = create_wcs(
 ra_range = [125, 175]
 dec_range = [-10.1, 5]
 
-window_name = "boxcar"
+window_name = "blackmanharris"
 
 # dndz_data = np.load("LRG_dndz.npz")
 dndz_data = np.load("LRGELG_dndz.npz")
@@ -47,87 +50,29 @@ kperpbins = np.linspace(0, 0.048, 17)[2:]
 kparabins = np.linspace(0, 0.5, 51)
 
 
-def plot_cy_power(xbins, ybins, pdatacy, pmodcy, vmin_ratio, vmax_ratio):
-    arr = np.array(
-        [
-            np.log10(pdatacy.mean(axis=0).T),
-            np.log10(pmodcy.T),
-        ]
-    )
-    vmin = np.nanmin(arr)
-    vmax = np.nanmax(arr)
-    fig, axes = plt.subplots(1, 3)
-    axes[0].pcolormesh(
-        xbins,
-        ybins,
-        np.log10(pdatacy.mean(axis=0).T),
-        vmin=vmin,
-        vmax=vmax,
-    )
-    im = axes[1].pcolormesh(
-        xbins,
-        ybins,
-        np.log10(pmodcy.T),
-        vmin=vmin,
-        vmax=vmax,
-    )
-    plt.colorbar(im, ax=axes[:-1], location="top", fraction=0.046, pad=0.04)
-    im = axes[2].pcolormesh(
-        xbins,
-        ybins,
-        (pdatacy.mean(axis=0).T) / (pmodcy.T),
-        vmin=vmin_ratio,
-        vmax=vmax_ratio,
-        cmap="bwr",
-    )
-    plt.colorbar(im, ax=axes[2], location="top", fraction=0.046, pad=0.04)
-    return fig
+##################
+# Detector Noise #
+##################
 
 
-def plot_1d_power(
-    keff,
-    pdatad,
-    pmodd,
-    ratio_min,
-    ratio_max,
-):
-    keff = np.array(keff)
-    pdatad = np.array(pdatad)
-    pmodd = np.array(pmodd)
-    sel = keff == keff
-    keff = keff[sel]
-    pdatad = pdatad[:, sel]
-    pmodd = pmodd[sel]
-    fig, axes = plt.subplots(
-        2,
-        1,
-        figsize=(10, 5),
-        sharex=True,
-        height_ratios=[2, 1],
-    )
-    axes[0].errorbar(
-        keff,
-        pdatad.mean(axis=0) * keff,
-        yerr=pdatad.std(axis=0) * keff,
-        label="mock",
-    )
-    axes[0].plot(keff, pmodd * keff, label="model", ls="--")
-    axes[0].set_ylim((pmodd * keff).min() * 0.7, (pmodd * keff).max() * 1.2)
-    axes[0].legend()
-    axes[1].errorbar(
-        keff,
-        (pdatad.mean(axis=0)) / (pmodd) - 1,
-        yerr=(pdatad.std(axis=0)) / (pmodd),
-    )
-    axes[1].axhline(0, color="black", ls="--")
-    axes[1].fill_between(
-        np.linspace(keff.min() - 0.005, keff.max() + 0.005, 100),
-        -0.05,
-        0.05,
-        color="black",
-        alpha=0.2,
-    )
-    axes[1].set_xlim(keff.min() - 0.005, keff.max() + 0.005)
-    axes[1].set_ylim(ratio_min, ratio_max)
-    axes[1].legend()
-    return fig
+NU_MHZ = np.array([565.2928416485901, 578.3080260303688, 585.6832971800434, 591.7570498915401, 606.5075921908893, 616.9197396963124, 626.4642082429501, 631.236442516269, 643.3839479392625, 646.4208242950108, 654.2299349240781, 665.5097613882863, 677.6572668112798, 690.2386117136659, 704.5553145336225, 720.1735357917571, 738.82863340564, 751.8438177874186, 755.3145336225597, 768.763557483731, 791.7570498915402, 802.1691973969631, 820.824295010846, 837.7440347071583, 847.2885032537961, 859.002169197397, 868.5466377440348, 873.7527114967462, 884.1648590021691, 892.407809110629, 911.062906724512, 923.644251626898, 933.1887201735358, 960.9544468546637, 983.5140997830803, 996.9631236442517, 1011.7136659436009, 1030.3687635574838, 1047.288503253796, 1055.0976138828632, 1060.303687635575])
+
+TSYS_OVER_ETA_K = np.array([36.75302245250432, 35.673575129533674, 34.98272884283247, 33.773747841105354, 33.1692573402418, 32.65112262521589, 32.089810017271155, 31.528497409326427, 31.355785837651123, 30.362694300518136, 29.32642487046632, 30.40587219343696, 29.585492227979273, 29.02417962003454, 27.858376511226254, 27.5993091537133, 27.08117443868739, 25.094991364421418, 26.260794473229705, 25.9153713298791, 25.310880829015545, 23.97236614853195, 23.97236614853195, 22.979274611398964, 23.238341968911918, 22.461139896373055, 21.8566493955095, 21.33851468048359, 19.8272884283247, 22.202072538860104, 21.8566493955095, 21.986183074265977, 21.07944732297064, 20.77720207253886, 20.129533678756477, 19.654576856649395, 19.870466321243523, 20.08635578583765, 21.511226252158895, 23.324697754749568, 28.808290155440414])
+
+tsys_inter = CubicSpline(NU_MHZ, TSYS_OVER_ETA_K, bc_type="natural")
+add_boundary_knots(tsys_inter)
+
+
+def sigma_N(num_pix):
+    nu = nu_arr * u.Hz
+    dnu = nu_resol * u.Hz
+
+    tsys_over_eta = tsys_inter(nu.to(u.MHz).value) * u.K
+
+    t_tot = 20 * u.hr
+    n_dish = 64
+    n_feeds = 2
+    t_pixel = n_dish * t_tot / num_pix
+
+    return tsys_over_eta / np.sqrt(n_feeds * (dnu * t_pixel).to(1).value)
+

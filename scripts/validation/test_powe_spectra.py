@@ -1,6 +1,10 @@
 import sys
+sys.path.append("../")
+
 import os
 from multiprocessing import Pool
+import logging
+from time import time
 
 import astropy.constants as c
 import astropy.units as u
@@ -20,8 +24,6 @@ from meer21cm.grid import shot_noise_correction_from_gridding
 from specs import *
 
 # Setup logger
-import logging
-from time import time
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(
@@ -51,8 +53,8 @@ def get_power(seed):
         mean_amp_1="average_hi_temp",
         omega_hi=5e-4,
         # sigma_beam_ch=sigma_beam_ch,
-        sigma_v_1= 105,
-        sigma_v_2= 105,
+        sigma_v_1= 100,
+        sigma_v_2= 100,
     )
     comov_dist = Planck18.comoving_distance(mock.z_ch).value
     sigma_beam_new = 1 / comov_dist * sigma_beam_ch
@@ -83,7 +85,7 @@ def get_power(seed):
     # compute field from data and weights
     mock.grid_scheme = "cic"
     himap_rg, _, _ = mock.grid_data_to_field()
-    gamap_rg, _, _ = mock.grid_gal_to_field()
+    galmap_rg, _, _ = mock.grid_gal_to_field()
     dndz_box = mock.discrete_source_dndz(mock._box_voxel_redshift)
 
     mock.field_1 = himap_rg
@@ -94,14 +96,14 @@ def get_power(seed):
     mock.compensate = [True, True]
     mock.include_beam = [True, False]
 
-    mock.field_2 = gamap_rg
+    mock.field_2 = galmap_rg
     mock.weights_field_2 = dndz_box
     mock.weights_grid_2 = ((dndz_box>0)*mock.counts_in_box).astype('float')
     mock.apply_taper_to_field(2, axis=[0, 1, 2])
 
     shot_noise = (
         get_shot_noise_galaxy(
-            gamap_rg,
+            galmap_rg,
             mock.box_len,
             mock.weights_grid_2,
             mock.weights_field_2,
@@ -156,7 +158,7 @@ if __name__ == "__main__":
     phixgal_arr = np.array(phixgal_arr)
 
     np.savez(
-        "../data/test_powerspectra_nosn.npz",
+        "../../data/test_powerspectra_nosn.npz",
         kmode=kmode,
         phi=phi_arr,
         pgal=pgal_arr,
