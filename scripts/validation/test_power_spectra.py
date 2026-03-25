@@ -158,7 +158,7 @@ if __name__ == "__main__":
     phixgal_arr = np.array(phixgal_arr)
 
     np.savez(
-        "../../data/test_powerspectra_nosn.npz",
+        "../../data/test.power_spectra_nosn.npz",
         kmode=kmode,
         phi=phi_arr,
         pgal=pgal_arr,
