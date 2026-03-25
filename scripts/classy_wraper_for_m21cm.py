@@ -1,9 +1,9 @@
-from astropy.cosmology import Planck18
-from astropy import units as u
-from classy import Class
-from scipy.interpolate import UnivariateSpline, CubicSpline
-from scipy.signal import find_peaks
 import numpy as np
+from astropy import units as u
+from astropy.cosmology import Planck18
+from classy import Class
+from scipy.interpolate import CubicSpline, UnivariateSpline
+from scipy.signal import find_peaks
 
 """
 The design process here assumes that all callable functions should follow the following paradigm:

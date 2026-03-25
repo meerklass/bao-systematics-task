@@ -1,7 +1,6 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from meer21cm.plot import plot_map
-
 
 ####################
 # Ploting routines #

@@ -1,21 +1,23 @@
 import sys
+
 sys.path.append("../")
 
+from multiprocessing import Pool
+
+import matplotlib.pyplot as plt
+import numpy as np
+import scipy.signal.windows as windows
+from astropy.cosmology import Planck18
 # project to sky coordinates and back
 from meer21cm import MockSimulation
-import numpy as np
-import matplotlib.pyplot as plt
-from meer21cm.plot import plot_map
-from meer21cm.util import create_wcs, redshift_to_freq
-from specs import *
-from scipy.interpolate import interp1d
-from meer21cm.telescope import dish_beam_sigma
-import scipy.signal.windows as windows
-from multiprocessing import Pool
-from meer21cm.power import bin_3d_to_cy, bin_3d_to_1d
-from meer21cm.power import get_shot_noise_galaxy
 from meer21cm.grid import shot_noise_correction_from_gridding
-from astropy.cosmology import Planck18
+from meer21cm.plot import plot_map
+from meer21cm.power import bin_3d_to_1d, bin_3d_to_cy, get_shot_noise_galaxy
+from meer21cm.telescope import dish_beam_sigma
+from meer21cm.util import create_wcs, redshift_to_freq
+from scipy.interpolate import interp1d
+
+from specs import *
 
 
 def get_3d_power(seed):

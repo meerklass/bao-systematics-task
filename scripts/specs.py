@@ -1,14 +1,13 @@
 # specifications for the simulation
-import numpy as np
-import matplotlib.pyplot as plt
-from meer21cm.util import create_wcs, redshift_to_freq, freq_to_redshift
-from astropy.cosmology import Planck18
 import astropy.units as u
-
-from scipy.interpolate import CubicSpline
-from utils import add_boundary_knots
-
+import matplotlib.pyplot as plt
+import numpy as np
+from astropy.cosmology import Planck18
 from meer21cm.telescope import dish_beam_sigma
+from meer21cm.util import create_wcs, freq_to_redshift, redshift_to_freq
+from scipy.interpolate import CubicSpline
+
+from utils import add_boundary_knots
 
 num_pix_x = 120
 num_pix_y = 40

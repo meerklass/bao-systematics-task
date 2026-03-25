@@ -1,25 +1,24 @@
 import sys
+
 sys.path.append("../")
 
+import logging
 import os
 from multiprocessing import Pool
-import logging
 from time import time
 
 import astropy.constants as c
 import astropy.units as u
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.interpolate import CubicSpline, interp1d
 import scipy.signal.windows as windows
-
-from meer21cm.power import bin_3d_to_cy, bin_3d_to_1d
-from meer21cm.telescope import dish_beam_sigma
 from meer21cm import MockSimulation
-from meer21cm.plot import plot_map
-from meer21cm.util import create_wcs, redshift_to_freq
-from meer21cm.power import get_shot_noise_galaxy
 from meer21cm.grid import shot_noise_correction_from_gridding
+from meer21cm.plot import plot_map
+from meer21cm.power import bin_3d_to_1d, bin_3d_to_cy, get_shot_noise_galaxy
+from meer21cm.telescope import dish_beam_sigma
+from meer21cm.util import create_wcs, redshift_to_freq
+from scipy.interpolate import CubicSpline, interp1d
 
 from specs import *
 
