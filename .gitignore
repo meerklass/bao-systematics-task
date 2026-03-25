@@ -167,3 +167,4 @@ cython_debug/
 #.idea/
 
 *_full_sims.npz
+old.*
