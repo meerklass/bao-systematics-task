@@ -5,6 +5,7 @@ from classy import Class
 from scipy.interpolate import CubicSpline, UnivariateSpline
 from scipy.signal import find_peaks
 
+from utils import add_boundary_knots
 """
 The design process here assumes that all callable functions should follow the following paradigm:
 
@@ -12,37 +13,9 @@ The design process here assumes that all callable functions should follow the fo
 - All functions that are callables of k and z should return a value with the shape of `(*k.shape, *z.shape)`
 - All functions of k and $\mu$ alone should require that `k.shape` and `mu.shape` are broadcastable. The return value should have the combined shape.
 - All Functions of k, $\mu$, and z should require that `k.shape` and `mu.shape` are broadcastable. The return value should have the shape `(*combined, *z.shape)`
-- Finally, all functions should return a scalar if given a scalar input. 
+- Finally, all functions should return a scalar if given a scalar input.
 """
 
-def add_boundary_knots(spline):
-    """
-    Add knots infinitesimally to the left and right.
-
-    Additional intervals are added to have zero 2nd and 3rd derivatives,
-    and to maintain the first derivative from whatever boundary condition
-    was selected. The spline is modified in place.
-    """
-    # determine the slope at the left edge
-    leftx = spline.x[0]
-    lefty = spline(leftx)
-    leftslope = spline(leftx, nu=1)
-
-    # add a new breakpoint just to the left and use the
-    # known slope to construct the PPoly coefficients.
-    leftxnext = np.nextafter(leftx, leftx - 1)
-    leftynext = lefty + leftslope*(leftxnext - leftx)
-    leftcoeffs = np.array([0, 0, leftslope, leftynext])
-    spline.extend(leftcoeffs[..., None], np.r_[leftxnext])
-
-    # repeat with additional knots to the right
-    rightx = spline.x[-1]
-    righty = spline(rightx)
-    rightslope = spline(rightx,nu=1)
-    rightxnext = np.nextafter(rightx, rightx + 1)
-    rightynext = righty + rightslope * (rightxnext - rightx)
-    rightcoeffs = np.array([0, 0, rightslope, rightynext])
-    spline.extend(rightcoeffs[..., None], np.r_[rightxnext])
 
 class Class_cosmo_model:
     K_LINEAR = 1e-3 #The scale at which lienar quantities like the growth rate are computed at
@@ -121,11 +94,11 @@ class Class_cosmo_model:
         } # Defaults for CAMB
 
         cosmo_dict.update(input_dict)
-        return cosmo_dict    
+        return cosmo_dict
 
     def transform_input_dict_to_class(self, input_dict: dict)->tuple:
         """Translates a imput dict for the meer21cm cosmology module into class input
-        
+
         This function follows the neutrino prescription of [2303.09451].
 
         Parameters
@@ -137,7 +110,7 @@ class Class_cosmo_model:
         -------
         tuple[iterable, dict]
             dictionary of cosmological input, and dictionary to be passed to class `Class.set()` functions
-        
+
         """
         #hardcoded
         T_cmb = Planck18.Tcmb(0).to(u.K).value
@@ -208,7 +181,7 @@ class Class_cosmo_model:
 
         k: float | np.ndarray
             wavenumbers in 1/Mpc units.
-        
+
         Returns
         -------
         float | np.ndarray
@@ -223,11 +196,11 @@ class Class_cosmo_model:
 
         # This should be changed to the actuall CMB background temp
         theta = Planck18.Tcmb(0).to(u.K).value / 2.7
-        
+
         rb = wb / wm
         ns = cosmo_inputs["ns"]
 
-        k = k# .to(u.Mpc**-1).value #input has to be in units of 1/Mpc 
+        k = k# .to(u.Mpc**-1).value #input has to be in units of 1/Mpc
         s = 44.5 * np.log(9.83 / wm) / np.sqrt(1 + 10 * wb ** (3 / 4))
         alpha = 1 - 0.328 * np.log(431 * wm) * rb + 0.38 * np.log(22.3 * wm) * rb**2
 
@@ -250,14 +223,14 @@ class Class_cosmo_model:
         Returns
         -------
         float | np.ndarray
-            Growth factor at redshift z. If z is not scalar, D will have the same shape as z 
+            Growth factor at redshift z. If z is not scalar, D will have the same shape as z
         """
         D = np.sqrt(self.Pk_lin(self.K_LINEAR, z, grid=False) / self.Pk_lin(self.K_LINEAR, 0, grid=False))
         return np.squeeze(D)
 
     def f_lin(self, z):
         """Calculate the linear growth rate f(z)
-        
+
         Parameters
         ----------
         z: float | np.ndarray
@@ -285,7 +258,7 @@ class Class_cosmo_model:
             An array of wavenumbers at which to compute the power spectrum.
         z: float | np.ndarray
             The redshift of interest.
-            
+
         Returns
         -------
         float | np.array
@@ -343,7 +316,7 @@ class Class_cosmo_model:
             Psmoothed[..., iz] = 0.5 * (Psl_peaks + Psl_valleys) * P_reshape
 
         return Psmoothed.reshape((*k.shape, *zs,))
-    
+
     def Pk_wiggle(self, k:np.ndarray, z:np.ndarray) -> np.ndarray:
         """Compute the wiggle component of the BAO
 
@@ -355,7 +328,7 @@ class Class_cosmo_model:
             An array of wavenumbers at which to compute the power spectrum.
         z: float | np.ndarray
             The redshift of interest.
-            
+
         Returns
         -------
         float | np.array
@@ -364,7 +337,7 @@ class Class_cosmo_model:
         """
         k = np.atleast_1d(k)
         z = np.atleast_1d(z)
-        
+
         Pk_mm = self.Pk_lin(k, z, grid=True).reshape((*k.shape, *z.shape))
         Pk_nw = self.Pk_nw(k, z)
         return Pk_mm - Pk_nw
@@ -391,11 +364,11 @@ class Class_cosmo_model:
 
     def Pk_QNL(self, k:np.ndarray, mu:np.ndarray, z:np.ndarray, sigmaV:np.ndarray) -> np.ndarray:
         """Compute the QNL power spectrum of matter
-        
+
         This function computes the quasi-nonlinear matter power spectrum using
         the dewiggling formalism. The smooth component is inferred from a cubic spline
         of inflection points.
-        
+
         Parameters
         ----------
         k: float | np.ndarray
@@ -406,7 +379,7 @@ class Class_cosmo_model:
             The redshift of interest.
         sigmaV: float | np.ndarray
             The variance of the velocity dispersion field. Should have the same shape as z
-        
+
         Returns
         -------
         float | np.ndarray
@@ -422,7 +395,7 @@ class Class_cosmo_model:
         assert z.shape == sigmaV.shape
         f = self.f_lin(z)
 
-        Pk_nw = self.Pk_nw(k, z) 
+        Pk_nw = self.Pk_nw(k, z)
         Pk_wiggle = self.Pk_wiggle(k, z)
 
         # extend dims in z (maybe we want to do this on a grid for AP effects?)
@@ -430,7 +403,54 @@ class Class_cosmo_model:
         sigmaV = sigmaV[*(np.ndim(k * mu) * (None, )), ...]
         k = k[..., *(np.ndim(z) * (None, ))]
         mu = mu[..., *(np.ndim(z) * (None, ))]
-        
+
         gmu = sigmaV**2 * (1 - mu**2 + mu**2 * (1 + f)**2)
         Pk_QNL = (Pk_nw + np.exp(-gmu * k**2) * Pk_wiggle)
         return Pk_QNL
+
+
+class power_spectrum_from_baopars:
+    def __init__(self, cosmo_fid:Class_cosmo_model, bao_pars:dict):
+        self.cosmo_fid = cosmo_fid
+
+        if "alpha_Iso" in bao_pars.keys():
+            self.alpha_AP = bao_pars.get("alpha_AP", 1)
+            self.alpha_Iso = bao_pars["alpha_Iso"]
+
+            self.alpha_parr = self.alpha_Iso * np.power(self.alpha_AP, 2/3)
+            self.alpha_perp = self.alpha_Iso * np.power(self.alpha_AP, -1/3)
+        elif "alpha_parr" in bao_pars.keys() and "alpha_perp" in bao_pars.keys():
+            self.alpha_parr = bao_pars["alpha_parr"]
+            self.alpha_perp = bao_pars["alpha_perp"]
+
+            self.alpha_Iso = self.alpha_perp**(2 / 3) * self.alpha_parr**(1 / 3)
+            self.alpha_AP =  self.alpha_parr / self.alpha_perp
+
+        self.sigma_v = bao_pars["sigma_v"]
+        self.bias = bao_pars["bias"]
+
+
+    def convert_modes(self, k, mu):
+        kparr_prime = k * mu / self.alpha_parr
+        kperp_prime = k * np.sqrt(np.clip(1-mu**2, 0, 1)) / self.alpha_parr
+
+        k_prime = np.sqrt(kperp_prime**2 + kparr_prime**2)
+        mu_prime = kparr_prime / k_prime
+        return k_prime, mu_prime
+
+
+    def powerspectrum(self,k, mu, z):
+        z = np.atleast_1d(z)
+        nz = np.ndim(z)
+
+        k_prime, mu_prime = self.convert_modes(k, mu)
+
+        fRSD = (self.bias + self.cosmo_fid.f_lin(z) * mu_prime[..., nz*(None,)]**2)**2
+        fAP = 1 / (self.alpha_Iso**3)
+
+        Pnw = self.cosmo_fid.Pk_nw(k, z)
+        Pwiggle = self.cosmo_fid.Pk_wiggle(k_prime, z)
+        gmu = self.sigma_v**2 * ((1 - mu_prime**2) + (1 + self.cosmo_fid.f_lin(z)) * mu_prime**2)
+        P_model = fAP * fRSD * (Pnw + Pwiggle * np.exp(-k_prime**2 * gmu))
+
+        return  np.squeeze(P_model)
