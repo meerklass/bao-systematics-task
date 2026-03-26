@@ -1,3 +1,5 @@
+import os
+
 # specifications for the simulation
 import astropy.units as u
 import matplotlib.pyplot as plt
@@ -36,7 +38,14 @@ dec_range = [-10.1, 5]
 window_name = "blackmanharris"
 
 # dndz_data = np.load("LRG_dndz.npz")
-dndz_data = np.load("LRGELG_dndz.npz")
+
+path = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "LRGELG_dndz.npz",
+)
+dndz_data = np.load(path)
+
+
 z_bin = dndz_data["z_bin"]
 z_count = dndz_data["z_count"]
 z_cen = (z_bin[:-1] + z_bin[1:]) / 2
