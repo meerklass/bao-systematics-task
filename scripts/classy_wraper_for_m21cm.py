@@ -4,16 +4,21 @@ from astropy.cosmology import Planck18
 from classy import Class
 from scipy.interpolate import CubicSpline, UnivariateSpline
 from scipy.signal import find_peaks
+from scipy.special import roots_legendre, legendre
 
 from utils import add_boundary_knots
-"""
-The design process here assumes that all callable functions should follow the following paradigm:
 
-- All functions that are callables of z alone should return a value with the shape of `z.shape`
-- All functions that are callables of k and z should return a value with the shape of `(*k.shape, *z.shape)`
-- All functions of k and $\mu$ alone should require that `k.shape` and `mu.shape` are broadcastable. The return value should have the combined shape.
-- All Functions of k, $\mu$, and z should require that `k.shape` and `mu.shape` are broadcastable. The return value should have the shape `(*combined, *z.shape)`
-- Finally, all functions should return a scalar if given a scalar input.
+"""
+Design conventions
+------------------
+
+All callable functions in this module follow a consistent shape convention:
+
+- Functions of z alone return arrays with shape `z.shape`
+- Functions of (k, z) return arrays with shape `(*k.shape, *z.shape)`
+- Functions of (k, μ) require broadcastable inputs and return the broadcasted shape
+- Functions of (k, μ, z) return shape `(*broadcast(k, μ), *z.shape)`
+- Scalar inputs always return scalars
 """
 
 
@@ -66,19 +71,18 @@ class Class_cosmo_model:
         self.D_lin_raw = cosmo.scale_independent_growth_factor
 
     def fill_cosmo_defaults(self, input_dict: dict)->dict:
-        """Fills an incomplete cosmology input with meer21cm defaults
-
-        This function will take a dictionary for input for the meer21cm cosmology module and fill missing input with defaults
+        """Fill missing cosmological parameters with default values.
 
         Parameters
         ----------
-        input_dict: dict
-            dictionarry containing the kwargs for meer21cm `get_camb_pars` member function.
+        input_dict : dict
+            Dictionary containing cosmological parameters. Missing entries will be
+            replaced with default values.
 
         Returns
         -------
         dict
-            dictionarry with missing parameters default values
+            Complete cosmological parameter dictionary with defaults applied.
         """
         cosmo_dict = {
         "tau" : 0.0561,
@@ -97,20 +101,25 @@ class Class_cosmo_model:
         return cosmo_dict
 
     def transform_input_dict_to_class(self, input_dict: dict)->tuple:
-        """Translates a imput dict for the meer21cm cosmology module into class input
+        """Translate input cosmology dictionary into CLASS input format.
 
-        This function follows the neutrino prescription of [2303.09451].
+        This function converts a cosmology dictionary used in the pipeline into the
+        parameter format required by the CLASS Boltzmann solver. It follows the
+        neutrino prescription of [2303.09451].
 
         Parameters
         ----------
-        input_dict: dict
-            dictionarry containing the kwargs for meer21cm `get_camb_pars` member function.
+        input_dict : dict
+            Dictionary of cosmological parameters.
 
         Returns
         -------
-        tuple[iterable, dict]
-            dictionary of cosmological input, and dictionary to be passed to class `Class.set()` functions
-
+        tuple
+            (cosmo_dict, class_input) where:
+            - cosmo_dict : dict
+                Cleaned cosmology dictionary used internally
+            - class_input : dict
+                Parameter dictionary passed to CLASS
         """
         #hardcoded
         T_cmb = Planck18.Tcmb(0).to(u.K).value
@@ -162,7 +171,22 @@ class Class_cosmo_model:
         return cosmo_dict_start, class_input
 
     def Dk_lin(self, k:np.ndarray, z:np.ndarray) -> np.ndarray:
-        """The dimensionless linear matter power spectrum
+        """Compute the dimensionless linear matter power spectrum.
+
+        This returns the dimensionless power spectrum:
+            Δ²(k) = k³ P(k) / (2π²)
+
+        Parameters
+        ----------
+        k : array_like
+            Wavenumbers in units of 1/Mpc.
+        z : array_like
+            Redshifts.
+
+        Returns
+        -------
+        np.ndarray
+            Dimensionless power spectrum with shape `(*k.shape, *z.shape)`.
         """
         z = np.atleast_1d(z)
         Pk_lin = self.Pk_lin(k, z, grid=True)
@@ -170,22 +194,20 @@ class Class_cosmo_model:
         return Dk_lin
 
     def P_nw_shape(self, k: np.ndarray) -> np.ndarray:
-        """Unnormalised Eisenstein--Hu function for the no-wiggle power spectrum
+        """Eisenstein--Hu no-wiggle transfer function (unnormalised).
 
-        This function returns a fitting function for the no-wiggle power spectrum.
+        This provides a smooth approximation to the power spectrum shape without BAO
+        oscillations.
 
         Parameters
         ----------
-        input_dict: dict
-            dictionarry containing the kwargs for meer21cm `get_camb_pars` member function.
-
-        k: float | np.ndarray
-            wavenumbers in 1/Mpc units.
+        k : array_like
+            Wavenumbers in units of 1/Mpc.
 
         Returns
         -------
-        float | np.ndarray
-            Powerspectrum approximation. If k is not scalar, the output will have the same shape.
+        np.ndarray
+            Smooth power spectrum shape (unnormalised).
         """
         cosmo_inputs = self.cosmodict
 
@@ -213,33 +235,34 @@ class Class_cosmo_model:
         return T_nw**2 * k**ns
 
     def D_lin(self, z):
-        """Calculate the linear growth factor D(z)
+        """Compute the linear growth factor D(z).
 
         Parameters
         ----------
-        z: float | np.ndarray
-            The redshift of interest.
+        z : float or array_like
+            Redshift(s).
 
         Returns
         -------
-        float | np.ndarray
-            Growth factor at redshift z. If z is not scalar, D will have the same shape as z
+        float or np.ndarray
+            Linear growth factor evaluated at z.
         """
         D = np.sqrt(self.Pk_lin(self.K_LINEAR, z, grid=False) / self.Pk_lin(self.K_LINEAR, 0, grid=False))
         return np.squeeze(D)
 
     def f_lin(self, z):
-        """Calculate the linear growth rate f(z)
+        """Compute the linear growth rate f(z) = d ln D / d ln a.
 
         Parameters
         ----------
-        z: float | np.ndarray
-            The redshift of interest.
+        z : float or array_like
+            Redshift(s).
 
         Returns
         -------
-        float | np.ndarray
-            Growth rate at redshift z. If z is not scalar, f will have the same shape as z """
+        float or np.ndarray
+            Growth rate evaluated at z.
+        """
         zinternal = np.linspace(0, self.Z_MAX)
         ainternal = 1 / (1 + zinternal)
         Dinternal = self.D_lin(zinternal)
@@ -249,21 +272,21 @@ class Class_cosmo_model:
         return f
 
     def Pk_nw(self, k: np.ndarray, z: np.ndarray) -> np.ndarray:
-        """Calculate the power spectrum at a specific redshift and wavenumber,
-        after smoothing to remove baryonic acoustic oscillations (BAO).
+        """Compute the smooth (no-wiggle) matter power spectrum.
+
+        The BAO oscillations are removed using a spline-based smoothing procedure.
 
         Parameters
         ----------
-        k: float | np.ndarray
-            An array of wavenumbers at which to compute the power spectrum.
-        z: float | np.ndarray
-            The redshift of interest.
+        k : array_like
+            Wavenumbers in units of 1/Mpc.
+        z : array_like
+            Redshifts.
 
         Returns
         -------
-        float | np.array
-            An array of smooth component power spectrum values corresponding to the
-            input wavenumbers.
+        np.ndarray
+            Smooth power spectrum with BAO features removed.
         """
         z = np.atleast_1d(z)
         zs = z.shape
@@ -318,22 +341,22 @@ class Class_cosmo_model:
         return Psmoothed.reshape((*k.shape, *zs,))
 
     def Pk_wiggle(self, k:np.ndarray, z:np.ndarray) -> np.ndarray:
-        """Compute the wiggle component of the BAO
+        """Compute the BAO wiggle component of the power spectrum.
 
-        Substract the smooth broad-band component from the model matter power spectrum
+        Defined as:
+            P_wiggle = P_lin - P_nw
 
         Parameters
         ----------
-        k: float | np.ndarray
-            An array of wavenumbers at which to compute the power spectrum.
-        z: float | np.ndarray
-            The redshift of interest.
+        k : array_like
+            Wavenumbers in units of 1/Mpc.
+        z : array_like
+            Redshifts.
 
         Returns
         -------
-        float | np.array
-            An array of power spectrum BAO wiggle values corresponding to the
-            input wavenumbers.
+        np.ndarray
+            BAO oscillatory component of the power spectrum.
         """
         k = np.atleast_1d(k)
         z = np.atleast_1d(z)
@@ -343,13 +366,19 @@ class Class_cosmo_model:
         return Pk_mm - Pk_nw
 
     def sigmav(self, z: np.ndarray):
-        """Computes the variance of the linear! velocity divergence field.
+        """Compute the velocity dispersion σ_v.
+
+        This corresponds to the variance of the linear velocity divergence field.
 
         Parameters
         ----------
-        z: float | np.ndarray
-            The redshift of interest.
+        z : array_like
+            Redshifts.
 
+        Returns
+        -------
+        np.ndarray
+            Velocity dispersion at each redshift.
         """
         z = np.atleast_1d(z)
         alpha = 3
@@ -363,32 +392,30 @@ class Class_cosmo_model:
         return np.sqrt(np.trapz(integrand, t, axis=0))
 
     def Pk_QNL(self, k:np.ndarray, mu:np.ndarray, z:np.ndarray, sigmaV:np.ndarray) -> np.ndarray:
-        """Compute the QNL power spectrum of matter
+        """Compute the quasi-nonlinear matter power spectrum.
 
-        This function computes the quasi-nonlinear matter power spectrum using
-        the dewiggling formalism. The smooth component is inferred from a cubic spline
-        of inflection points.
+        This uses the dewiggling formalism, where BAO oscillations are damped by
+        large-scale bulk flows.
 
         Parameters
         ----------
-        k: float | np.ndarray
-            An array of wavenumbers at which to compute the power spectrum.
-        mu: float | np.ndarray
-            The cosine of the angle between the LOS and the 3D k mode.
-        z: float | np.ndarray
-            The redshift of interest.
-        sigmaV: float | np.ndarray
-            The variance of the velocity dispersion field. Should have the same shape as z
+        k : array_like
+            Wavenumbers in 1/Mpc.
+        mu : array_like
+            Cosine of the angle to the line of sight.
+        z : array_like
+            Redshifts.
+        sigmaV : array_like
+            Velocity dispersion, must match shape of z.
 
         Returns
         -------
-        float | np.ndarray
-            The quasi-nonlinear power spectrum for a given modulus of k, mu and redshift.
-            If the input is not scalar the resulting shape will be the fully broadcasted shape
+        np.ndarray
+            Quasi-nonlinear matter power spectrum.
 
         Notes
         -----
-        The shapes of k and mu should be broadcastable. z and sigmaV need to have the same shape.
+        k and mu must be broadcastable. z and sigmaV must have identical shapes.
         """
         z = np.atleast_1d(z)
         sigmaV = np.atleast_1d(sigmaV)
@@ -427,12 +454,27 @@ class power_spectrum_from_baopars:
             self.alpha_AP =  self.alpha_parr / self.alpha_perp
 
         self.sigma_v = bao_pars["sigma_v"]
+        self.sigma_p = bao_pars["sigma_p"]
         self.bias = bao_pars["bias"]
 
 
     def convert_modes(self, k, mu):
+        """Apply Alcock--Paczyński (AP) scaling to Fourier modes.
+
+        Parameters
+        ----------
+        k : array_like
+            Observed wavenumbers.
+        mu : array_like
+            Cosine of the angle to the line of sight.
+
+        Returns
+        -------
+        tuple
+            (k', mu') transformed to the trial cosmology.
+        """
         kparr_prime = k * mu / self.alpha_parr
-        kperp_prime = k * np.sqrt(np.clip(1-mu**2, 0, 1)) / self.alpha_parr
+        kperp_prime = k * np.sqrt(np.clip(1-mu**2, 0, 1)) / self.alpha_perp
 
         k_prime = np.sqrt(kperp_prime**2 + kparr_prime**2)
         mu_prime = kparr_prime / k_prime
@@ -440,17 +482,129 @@ class power_spectrum_from_baopars:
 
 
     def powerspectrum(self,k, mu, z):
+        """Compute the anisotropic galaxy power spectrum model.
+
+        Includes:
+        - Alcock--Paczyński scaling
+        - Linear RSD (Kaiser)
+        - Finger-of-God damping
+        - BAO damping
+
+        Parameters
+        ----------
+        k : array_like
+            Wavenumbers.
+        mu : array_like
+            Cosine of angle to the line of sight.
+        z : array_like
+            Redshifts.
+
+        Returns
+        -------
+        np.ndarray
+            Model power spectrum P(k, μ, z).
+        """
         z = np.atleast_1d(z)
         nz = np.ndim(z)
 
         k_prime, mu_prime = self.convert_modes(k, mu)
 
-        fRSD = (self.bias + self.cosmo_fid.f_lin(z) * mu_prime[..., nz*(None,)]**2)**2
+        fRSD = (self.bias + self.cosmo_fid.f_lin(z) * mu_prime[..., *(nz*(None,))]**2)**2
         fAP = 1 / (self.alpha_Iso**3)
+        fFOG = (1 + 1 / 2 * (k_prime * mu_prime)[..., *(nz*(None,))]**2 * self.sigma_p**2)**-2
 
-        Pnw = self.cosmo_fid.Pk_nw(k, z)
+        Pnw = self.cosmo_fid.Pk_nw(k_prime, z)
         Pwiggle = self.cosmo_fid.Pk_wiggle(k_prime, z)
-        gmu = self.sigma_v**2 * ((1 - mu_prime**2) + (1 + self.cosmo_fid.f_lin(z)) * mu_prime**2)
-        P_model = fAP * fRSD * (Pnw + Pwiggle * np.exp(-k_prime**2 * gmu))
+        gmu = self.sigma_v**2 * ((1 - mu_prime[..., *(nz*(None,))]**2) + (1 + self.cosmo_fid.f_lin(z))**2 * mu_prime[..., *(nz*(None,))]**2)
+        P_model = fAP * fRSD * fFOG * (Pnw  + Pwiggle * np.exp(-k_prime**2 * gmu))
 
         return  np.squeeze(P_model)
+
+
+    def powerspectrum_multipoles(self, k, ell, z):
+        """Compute multipoles of the power spectrum.
+
+        Multipoles are defined as:
+            P_ell(k) = (2ell+1)/2 ∫_{-1}^{1} dμ P(k,μ) L_ell(μ)
+
+        The integral is evaluated using Gauss--Legendre quadrature.
+
+        Parameters
+        ----------
+        k : array_like
+            Wavenumbers.
+        ell : array_like
+            Multipole orders (e.g. [0, 2, 4]).
+        z : array_like
+            Redshifts.
+
+        Returns
+        -------
+        np.ndarray
+            Multipole power spectra with shape `(*k.shape, *ell.shape, *z.shape)`.
+        """
+        k = np.atleast_1d(k)
+        ks = k.shape
+        k = k.flatten()
+
+        ell = np.atleast_1d(ell)
+        z = np.atleast_1d(z)
+
+        mu, wi = roots_legendre(9)
+        power = self.powerspectrum(k[:, None, None], mu[None, :, None], z)
+
+        output = []
+        for elli in ell:
+            if elli % 2 != 0:
+                output.append(np.zeros((*k.shape, *z.shape)))
+                continue
+
+            output.append(
+                (2 * elli + 1) / 2 * np.sum(
+                    power
+                    * wi[None, :, None]
+                    * legendre(elli)(mu)[None, :, None],
+                    axis=1
+                )
+            )
+        output = np.array(output).transpose((1, 0, 2)).reshape((*ks, *ell.shape, *z.shape)).squeeze()
+        return output
+
+
+    def broadband(k, ell, broadbandpars):
+        """Compute broadband polynomial contribution to multipoles.
+
+        The broadband is modeled as:
+            P_ell^bb(k) = Σ_i a_{ell,i} k^{p_i}
+
+        with powers p_i = [-2, -1, 0, 1, 2].
+
+        Parameters
+        ----------
+        k : array_like
+            Wavenumbers.
+        ell : array_like
+            Multipole orders.
+        broadbandpars : dict
+            Dictionary containing coefficients a_{ell,i}.
+
+        Returns
+        -------
+        np.ndarray
+            Broadband contribution for each multipole.
+        """
+        k = np.atleast_1d(k)
+        ell = np.atleast_1d(ell)
+
+        powers = np.array([-2, -1, 0, 1, 2])
+        labels = np.arange(len(powers))
+
+        kp = k[..., None]**powers
+
+        output = []
+        for elli in ell:
+            ai = np.array([broadbandpars[f"a_{elli}_{i}"] for i in labels])
+            output.append(
+                np.einsum("...i, i", kp, ai)
+            )
+        return np.array(output).T.squeeze()
