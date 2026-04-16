@@ -437,7 +437,7 @@ class Class_cosmo_model:
 
 
 class power_spectrum_from_baopars:
-    def __init__(self, cosmo_fid:Class_cosmo_model, bao_pars:dict):
+    def __init__(self, cosmo_fid:Class_cosmo_model, bao_pars:dict, desi_like_bao=False):
         self.cosmo_fid = cosmo_fid
 
         if "alpha_Iso" in bao_pars.keys():
@@ -456,7 +456,9 @@ class power_spectrum_from_baopars:
         self.sigma_v = bao_pars["sigma_v"]
         self.sigma_p = bao_pars["sigma_p"]
         self.bias = bao_pars["bias"]
+        self.bias_2 = bao_pars.get("bias_2", self.bias)
 
+        self.desi_like_bao = desi_like_bao
 
     def convert_modes(self, k, mu):
         """Apply Alcock--Paczyński (AP) scaling to Fourier modes.
@@ -481,8 +483,77 @@ class power_spectrum_from_baopars:
         return k_prime, mu_prime
 
 
-    def powerspectrum(self,k, mu, z):
-        """Compute the anisotropic galaxy power spectrum model.
+    def rsd(self, b1, mu, z, b2=None):
+        if b2==None:
+            b2 = b1
+
+        z = np.atleast_1d(z)
+        nz = np.ndim(z)
+        rsd = (
+            (b1 + self.cosmo_fid.f_lin(z) * mu[..., *(nz*(None,))]**2)
+            * (b2 + self.cosmo_fid.f_lin(z) * mu[..., *(nz*(None,))]**2)
+        )
+        return rsd
+
+
+    def powerspectrum_nw(self,k, mu, z, which="1"):
+        """Compute the smooth no-wiggle part of tracer power spectra in redshift space.
+
+        Includes:
+        - Alcock--Paczyński scaling (if asked for)
+        - Linear RSD (Kaiser)
+        - Finger-of-God damping
+
+        Parameters
+        ----------
+        k : array_like
+            Wavenumbers.
+        mu : array_like
+            Cosine of angle to the line of sight.
+        z : array_like
+            Redshifts.
+        which : str
+            Which tracer the power spectrum should be computed of.
+            Either "1", "2", or "both"
+
+        Returns
+        -------
+        np.ndarray
+            Model power spectrum P(k, μ, z).
+        z = np.atleast_1d(z)
+        """
+        k = np.atleast_1d(k)
+        z = np.atleast_1d(z)
+        nz = np.ndim(z)
+
+        if self.desi_like_bao:
+            fAP = 1
+            k_prime, mu_prime = k, mu
+        else:
+            fAP = 1 / (self.alpha_Iso**3) # Very degenerate with b
+            k_prime, mu_prime = self.convert_modes(k, mu)
+
+        Pnw = self.cosmo_fid.Pk_nw(k_prime, z).reshape((*k.shape, *z.shape))
+        fFOG = (
+            (1 + 1 / 2 * (k_prime * mu_prime)[..., *(nz*(None,))]**2 * self.sigma_p**2)**-2
+        ).reshape((*k.shape, *z.shape))
+        P_mm_real = fAP * fFOG * Pnw
+
+        output = []
+        if which in ["1", "both"]:
+            fRSD = self.rsd(self.bias, mu_prime, z)
+            output.append((fRSD * P_mm_real).squeeze())
+        if which == "both":
+            fRSD = self.rsd(self.bias, mu_prime, z, self.bias_2)
+            output.append((fRSD * P_mm_real).squeeze())
+        if which in ["2", "both"]:
+            fRSD = self.rsd(self.bias_2, mu_prime, z)
+            output.append((fRSD * P_mm_real).squeeze())
+
+        return  np.array(output).squeeze()
+
+    def powerspectrum_w(self,k, mu, z, which="1"):
+        """Compute the wiggle part of tracer power spectra in redshift space.
 
         Includes:
         - Alcock--Paczyński scaling
@@ -498,28 +569,81 @@ class power_spectrum_from_baopars:
             Cosine of angle to the line of sight.
         z : array_like
             Redshifts.
+        which : str
+            Which tracer the power spectrum should be computed of.
+            Either "1", "2", or "both"
 
         Returns
         -------
         np.ndarray
             Model power spectrum P(k, μ, z).
+        z = np.atleast_1d(z)
         """
+        k = np.atleast_1d(k)
         z = np.atleast_1d(z)
         nz = np.ndim(z)
 
         k_prime, mu_prime = self.convert_modes(k, mu)
 
-        fRSD = (self.bias + self.cosmo_fid.f_lin(z) * mu_prime[..., *(nz*(None,))]**2)**2
-        fAP = 1 / (self.alpha_Iso**3)
-        fFOG = (1 + 1 / 2 * (k_prime * mu_prime)[..., *(nz*(None,))]**2 * self.sigma_p**2)**-2
+        if self.desi_like_bao:
+            fAP = 1
+        else:
+            fAP = 1 / (self.alpha_Iso**3)
 
-        Pnw = self.cosmo_fid.Pk_nw(k_prime, z)
-        Pwiggle = self.cosmo_fid.Pk_wiggle(k_prime, z)
-        gmu = self.sigma_v**2 * ((1 - mu_prime[..., *(nz*(None,))]**2) + (1 + self.cosmo_fid.f_lin(z))**2 * mu_prime[..., *(nz*(None,))]**2)
-        P_model = fAP * fRSD * fFOG * (Pnw  + Pwiggle * np.exp(-k_prime**2 * gmu))
+        Pwiggle = self.cosmo_fid.Pk_wiggle(k_prime, z).reshape((*k.shape, *z.shape))
+        fFOG = (
+            (1 + 1 / 2 * (k_prime * mu_prime)[..., *(nz*(None,))]**2 * self.sigma_p**2)**-2
+        ).reshape((*k.shape, *z.shape))
+        gmu = self.sigma_v**2 * (
+            (1 - mu_prime[..., *(nz*(None,))]**2)
+            + (1 + self.cosmo_fid.f_lin(z))**2 * mu_prime[..., *(nz*(None,))]**2
+        )
+        fDamp = np.exp(-k_prime[..., *(nz*(None,))]**2 * gmu)
 
-        return  np.squeeze(P_model)
+        P_mm_wiggle = fAP * fDamp * fFOG * Pwiggle
+        output = []
+        if which in ["1", "both"]:
+            fRSD = self.rsd(self.bias, mu_prime, z)
+            output.append((fRSD * P_mm_wiggle).squeeze())
+        if which == "both":
+            fRSD = self.rsd(self.bias, mu_prime, z, self.bias_2)
+            output.append((fRSD * P_mm_wiggle).squeeze())
+        if which in ["2", "both"]:
+            fRSD = self.rsd(self.bias_2, mu_prime, z)
+            output.append((fRSD * P_mm_wiggle).squeeze())
 
+        return  np.array(output).squeeze()
+
+    def powerspectrum(self,k, mu, z, which="1"):
+        """Compute the galaxy and termperature power spectra.
+
+        Includes:
+        - Alcock--Paczyński scaling
+        - Linear RSD (Kaiser)
+        - Finger-of-God damping
+        - BAO damping
+
+        Parameters
+        ----------
+        k : array_like
+            Wavenumbers.
+        mu : array_like
+            Cosine of angle to the line of sight.
+        z : array_like
+            Redshifts.
+        which : str
+            Which tracer the power spectrum should be computed of.
+            Either "1", "2", or "both"
+
+        Returns
+        -------
+        np.ndarray
+            Model power spectrum P(k, μ, z).
+        z = np.atleast_1d(z)
+        """
+        pwiggle = self.powerspectrum_w(k, mu, z, which=which)
+        pnowiggle = self.powerspectrum_nw(k, mu, z, which=which)
+        return pwiggle + pnowiggle
 
     def powerspectrum_multipoles(self, k, ell, z):
         """Compute multipoles of the power spectrum.
@@ -551,6 +675,7 @@ class power_spectrum_from_baopars:
         z = np.atleast_1d(z)
 
         mu, wi = roots_legendre(9)
+        raise NotImplementedError # need to change this to new inoput type
         power = self.powerspectrum(k[:, None, None], mu[None, :, None], z)
 
         output = []
