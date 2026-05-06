@@ -1,5 +1,7 @@
 \documentclass{article}
 \usepackage{graphicx} % Required for inserting images
+\usepackage{mathtools}
+\usepackage{amsmath}
 
 \title{BAO detection in cross-correlation with DESI}
 \author{Alkistis, José, Sefa, Zhaoting}
@@ -9,6 +11,29 @@
 
 \maketitle
 
-\section{Introduction}
-
+\section{Theoretical Model for ${\rm T \times g}$ Power Spectrum}
+    To model the real space power spectrum, we use a rudimentary non-linear model.The linear power spectrum is decomposed into a sum of a smooth component, $P_{\rm nw}$ and a distinct "wiggly" part $P_{\rm w}$. This seperation is done by following a dewiggling routine, where two cubic splines are fitted through infletion points of the normalised power spectrum. This procedure follows the standard from BOSS\\
+    \begin{equation}
+        P^{\rm lin}_{\rm mm} = P_{\rm nw} + P_{\rm w}\:.
+    \end{equation}
+    To compute the quasi non-linear power spectrum, the wiggle power spectrum is supressed in a $k$-dependendt way. The supression factor is a phenomenological approximation to the correct LPT result.
+    \begin{equation}
+        g(k, \mu) = \exp\left[-\sigma_v^2\,k^2\,\left(\left(1-\mu^2\right) + \mu^2\,\left(1 + f\right)^2\right)\right]\:,
+    \end{equation}
+    where $\mu$ is the angle between the line of sight and the $k$ mode in a small angle approximation. The real space variance of the velocity dispersion $\sigma_v$ can either be handled as a free parameter or fixed to the linear prediction. The growth rate $f$ is fixed to the cosmology value.\\
+    The quasi non-linear matter power spectrum is given by:
+    \begin{equation}
+        P_{\rm mm}^{\rm QNL}(k, \mu) = P_{\rm nw}(k, \mu) + g(k, \mu)\,P_{\rm w}(k, \mu)\:.
+    \end{equation}
+    To obtain the tracer power spectrum in redshift space we use the linear kaiser formulation and correct for the fingers of god effect by multiplying a phenomenological function.
+    \begin{equation}
+        \mathrm{FOG}(k, \mu) = \frac{1}{1 + \left[f\,k\,\mu\,\sigma_p\right]^2}\:,
+    \end{equation}
+    where $\sigma_p$ is the real space variance of the perculiar motion of collapsed objects. We fix this quantity to the linear perturbation theory prediction. The exact form of the fingers of god supression is not to important but the formula we use here is the same as in the state-of-the-art analysis of DESI.\\
+    Since we are computing the temperature cross galaxy power spectrum we need to introduce two bias parameters.
+    \begin{equation}
+        P_{\rm Tg}^{\rm QNL}(k, \mu) = {\rm FOG}(k, \mu) \, (b_{\rm T} + f\,\mu^2)\,(b_{\rm g} + f\,\mu^2)\,P_{\rm mm}^{\rm QNL}(k, \mu)\:.
+    \end{equation}
+    \section{Observational Effects}
+    Due to the finite survey geometry the possible $\boldsymbol{k}$ are discretized into integer multiples of the fundamental mode per dimention. The smallest acessable scale is given by the sampling rate. For a Line intensity mapping experiemtn this is essentially the voxel size.
 \end{document}
