@@ -38,9 +38,9 @@
     Due to the finite survey geometry the possible $\boldsymbol{k}$ are discretized into integer multiples of the fundamental mode per dimension. The smallest accessible scale is given by the sampling rate. For a Line intensity mapping experiments this is essentially the voxel size.\\
     Additionally, the instrument Beam, the pixelation, and griding does additionally suppress the measured signal. As all three effects influence the measured temperature field while the Galaxy field is only affected by the griding, the cross power spectrum is given by
     \begin{equation}
-        P_{\rm Tg}^{\rm obs\,eff}(k_i, \mu_i) = \mathrm{B}(k_i, \mu_i)\, \mathrm{P}(k_i, \mu_i)\, \mathrm{G}^2(k_i, \mu_i)\,P_{\rm Tg}(k_i, \mu_i)\:,
+        P_{\rm Tg}^{\rm obs\,eff}(k_i, \mu_i) = \mathcal{B}(k_i, \mu_i)\, \mathcal{P}(k_i, \mu_i)\, \mathcal{G}^2(k_i, \mu_i)\,P_{\rm Tg}(k_i, \mu_i)\:,
     \end{equation}
-    where ${\rm B}$, ${\rm P}$, and ${\rm G}$ are the three distinct effects, respectively.\\
+    where $\mathcal{B}$, $\mathcal{P}$, and $\mathcal{G}$ are the three distinct effects, respectively.\\
     Finally, the non-uniform sampling of the lightcone, leads to non-trivial survey weights which propagate to the measured power spectrum in the from of a convolution with the Fourier-transformed weights function $W(\boldsymbol{k})$,
     \begin{equation}
         P^{W}_{\rm Tg}(k_i,\mu_i) = \frac{1}{V}\,\sum_j\,W(\boldsymbol{k}_i-\boldsymbol{k}_j)\,P_{\rm Tg}^{\rm obs\,eff}(k_j, \mu_j)\:.
@@ -58,8 +58,8 @@
     \end{equation}
     The dimensionality of the data is further reduced by binning the modulus of the wave vectors into one-dimensional bins. This is similar to extracting the cosmological monopole, but, due to the discretized wave vectors and non-cubic geometry, this quantity deviates from the true monopole through putting more weight into a preferred direction.
     \begin{equation}
-        P^{\rm th}_{\rm 1D}(k_i) = \frac{1}{N_i}\,\sum_{\boldsymbol{k}_j \in \text{bin}_i} P^{\rm th}(k_j, \mu_j)
-    \end{equation} 
+        P^{\rm th}_{\rm 1d}(k_i) = \frac{1}{N_i}\,\sum_{\boldsymbol{k}_j \in \text{bin}_i} P^{\rm th}(k_j, \mu_j)
+    \end{equation}
     To be more agnostic to possible systematics, which might change the overall shape of the power spectrum, we perform a marginalisation over the broad band shape of the power spectrum. This allows us to isolate the cosmological information in the position of the BAO.\\
     The broadband is given as a linear combination of multiple cubic splines.
     \begin{equation}
@@ -69,5 +69,34 @@
             0& \text{elsewise}
         \end{cases}
     \end{equation}
-    The broadband power spectrum is given by a sum over\dots
+    By shifting the cubic spline we can achieve a smooth coverage of the range of scales.
+    \begin{equation}
+        \mathcal{D}(k_i) = \sum_{j=-1} a_i\,X\left(\frac{k_i}{\Delta}-j\right)\:,
+    \end{equation}
+    where the parameter $\Delta$ defines the width of the splines and thus the smallest feature that the broadband parametrisation would resolve. We fix $\Delta$ to a reasonable value larger than the distance between two BAO peaks. The amplitude parameters $a_i$ are free to vary and will be margenalised over.\\
+    Having the freedom to margenalise over any smooth functions allows us to choose to model the power spectrum in a way that we explicitly remove any possible information from the broadband. In this model we write
+    \begin{align}
+        P^{\rm obs\,eff}_{\rm mod}(k_i, \mu_i) &= \mathcal{B}(k_i, \mu_i)\, \mathcal{P}(k_i, \mu_i)\, \mathcal{G}^2(k_i, \mu_i) \nonumber\\
+        &\times \left[\mathrm{RSD}(k_i, \mu_i)\,P_{\rm nw}(k_i, \mu_i)\right.\nonumber\\
+        &+\left.\mathrm{RSD}(k'_i, \mu'_i)\,g(k'_i, \mu'_i)\,P_{\rm w}(k'_i, \mu'_i)\right]\:,
+    \end{align}
+    where we have defined ${\rm RSD}$ as the combination of fingers-of-god effect and the two distinct kaiser terms. To obtain the model power spectrum, we need to convolve it with the survey weights and bin it like previously
+    \begin{equation}
+        P_{\rm 1d}^{\rm mod}(k_i) = \frac{1}{N_i}\sum_{\boldsymbol{k}_j \in \text{bin}_i}\,\frac{1}{V}\sum_{l}W(\boldsymbol{k}_j - \boldsymbol{k}_l)\,P^{\rm obs\, eff}_{\rm mod}(k_l, \mu_l)\:.
+    \end{equation}
+\section{Likelihood}
+    To formulate our log-Likelihood is now given as the difference between the model power spectrum plus the broadband and the theoretical power spectrum which isolates the cosmological information coming only from the shifts in the apparent scale of the BAO wiggles. We write the Likelihood as
+    \begin{align}
+        \Delta_i &= P_{\rm 1d}^{\rm mod}(k_i) + \mathcal{D} - P^{\rm th}_{\rm 1d}(k_i),\\
+        \log \mathcal{L} &= -\frac{1}{2}\, \Delta_i \mathrm{Cov}^{-1}_{ij} \, \Delta_j\:.
+    \end{align}
+    To speed up convergence and remove possible prior effects, we analytically margenalise over the $a_i$. Following standard procedure 
+    \begin{align}
+        \boldsymbol{X} &= \left[ X\left(\frac{k_i}{\Delta}+1\right), \dots, X\left(\frac{k_i}{\Delta}-N\right) \right]\:,\\
+        \mathrm{Cov}^{-1}_{\rm marg} &=  \mathrm{Cov}^{-1} - \mathrm{Cov}^{-1}\,\boldsymbol{X}^\mathrm{T}\, \left(\boldsymbol{X}\,\mathrm{Cov}^{-1}\,\boldsymbol{X}^{\rm T}\right)^{-1}\,\boldsymbol{X}\,\mathrm{Cov}^{-1}
+    \end{align}
+    With this, we find a lower-dimensional expression for the Likelihood
+    \begin{equation}
+        \log \mathcal{L} = -\frac{1}{2}\left(P_{\rm 1d}^{\rm mod}- P^{\rm th}_{\rm 1d}\right) \mathrm{Cov}_\mathrm{marg}^{-1} \left(P_{\rm 1d}^{\rm mod}- P^{\rm th}_{\rm 1d}\right)^{\rm T}\:.
+    \end{equation}
 \end{document}
