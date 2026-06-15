@@ -18,7 +18,7 @@ handler.setFormatter(
     logging.Formatter("[%(levelname)s] %(message)s")
 )
 logger.addHandler(handler)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 
 def get_power(seed):
@@ -139,7 +139,7 @@ if __name__ == "__main__":
     os.environ["OMP_NUM_THREADS"] = str(scaling)
     squeezed_cpus = int(n_cpus // scaling)
 
-    Nreal = 500
+    Nreal = 30
     logger.info(f"Number of realisations = {Nreal}")
 
     phi_arr, pgal_arr, phixgal_arr = [], [], []
