@@ -11,7 +11,9 @@ from mpi4py import MPI
 
 from meer21cm import MockSimulation
 
-sys.path.append("../specs")
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src")
+)
 from specs_v2 import *
 
 TAG_TASK = 1
@@ -74,7 +76,7 @@ def get_powerspectra(seed, logger):
     mock.downres_factor_transverse = 1.5
     mock.downres_factor_radial = 1
     mock.get_enclosing_box()
-    t2=time()
+    t2 = time()
     logger.debug(f"setup {t2-t1} s")
 
     #############
@@ -163,7 +165,7 @@ if __name__ == "__main__":
                 phi_mod_arr.append(data[3])
                 pgal_mod_arr.append(data[4])
                 phixgal_mod_arr.append(data[5])
-                kmode=data[6]
+                kmode = data[6]
             elif tag == TAG_TERMINATE:
                 num_workers_done += 1
         phi_arr = np.array(phi_arr)

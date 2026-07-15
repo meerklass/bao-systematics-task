@@ -11,7 +11,9 @@ from mpi4py import MPI
 
 from meer21cm import MockSimulation
 
-sys.path.append("../specs")
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src")
+)
 from specs_v2 import *
 
 TAG_TASK = 1

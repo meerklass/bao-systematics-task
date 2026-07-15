@@ -10,70 +10,79 @@ import scipy.signal.windows as windows
 from meer21cm import MockSimulation
 from scipy.interpolate import interp1d
 
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src")
+)
 from specs import *
 
 from mpi4py import MPI
+
 TAG_TASK = 1
 TAG_DONE = 2
 TAG_TERMINATE = 3
 
+
 def _prepare_logging(rank):
     logger = logging.getLogger(f"rank{rank}")
     handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter(f"[Rank {rank:02d} %(levelname)s] %(message)s"))
+    handler.setFormatter(
+        logging.Formatter(f"[Rank {rank:02d} %(levelname)s] %(message)s")
+    )
     logger.addHandler(handler)
     logger.setLevel(logging.DEBUG)
     return logger
 
+
 def get_powerspectra(mock, seed, logger):
-        logger.debug(f"seed {seed}")
-        tstart = time()
-        mock.seed = seed
+    logger.debug(f"seed {seed}")
+    tstart = time()
+    mock.seed = seed
 
-        mock.taper_func = getattr(windows, window_name)
-        mock.num_discrete_source = int(mock.survey_volume * n_gal)
-        mock.W_HI = np.ones_like(mock.W_HI)
-        mock.w_HI = np.ones_like(mock.w_HI)
-        mock.downres_factor_transverse = 1 / 2
-        mock.downres_factor_radial = 1 / 2
-        mock.get_enclosing_box()
-        num_pix = mock.W_HI[:,:,0].sum()
+    mock.taper_func = getattr(windows, window_name)
+    mock.num_discrete_source = int(mock.survey_volume * n_gal)
+    mock.W_HI = np.ones_like(mock.W_HI)
+    mock.w_HI = np.ones_like(mock.w_HI)
+    mock.downres_factor_transverse = 1 / 2
+    mock.downres_factor_radial = 1 / 2
+    mock.get_enclosing_box()
+    num_pix = mock.W_HI[:, :, 0].sum()
 
-        # randomly generate frequency dependend noise
-        generator = np.random.default_rng(seed=seed+50) # this 50 means nothing
-        noise_realisation = sigma_N(num_pix)[None, None, :] * (
-            generator.normal(size=(num_pix_x, num_pix_y, num_ch))
-        )
+    # randomly generate frequency dependend noise
+    generator = np.random.default_rng(seed=seed + 50)  # this 50 means nothing
+    noise_realisation = sigma_N(num_pix)[None, None, :] * (
+        generator.normal(size=(num_pix_x, num_pix_y, num_ch))
+    )
 
-        mock.data = mock.propagate_mock_field_to_data(mock.mock_tracer_field_1)
-        mock.propagate_mock_tracer_to_gal_cat()
-        mock.trim_map_to_range()
-        mock.trim_gal_to_range()
+    mock.data = mock.propagate_mock_field_to_data(mock.mock_tracer_field_1)
+    mock.propagate_mock_tracer_to_gal_cat()
+    mock.trim_map_to_range()
+    mock.trim_gal_to_range()
 
-        # resore window
-        mock.downres_factor_transverse = 3
-        mock.downres_factor_radial = 6
-        mock.get_enclosing_box()
+    # resore window
+    mock.downres_factor_transverse = 3
+    mock.downres_factor_radial = 6
+    mock.get_enclosing_box()
 
-        # compute field from data and weights
-        mock.grid_scheme = "cic"
-        himap_rg, _, _ = mock.grid_data_to_field()
-        galmap_rg, _, _ = mock.grid_gal_to_field()
-        dndz_box = mock.discrete_source_dndz(mock.box_voxel_redshift)
+    # compute field from data and weights
+    mock.grid_scheme = "cic"
+    himap_rg, _, _ = mock.grid_data_to_field()
+    galmap_rg, _, _ = mock.grid_gal_to_field()
+    dndz_box = mock.discrete_source_dndz(mock.box_voxel_redshift)
 
-        mock.field_1 = himap_rg
-        mock.weights_1 = mock.counts_in_box.astype(np.float32)
-        mock.apply_taper_to_field(1, axis=[0, 1, 2])
+    mock.field_1 = himap_rg
+    mock.weights_1 = mock.counts_in_box.astype(np.float32)
+    mock.apply_taper_to_field(1, axis=[0, 1, 2])
 
-        mock.field_2 = galmap_rg
-        mock.weights_field_2 = dndz_box
-        mock.weights_grid_2 = ((dndz_box>0)*mock.counts_in_box).astype('float') # test
-        mock.apply_taper_to_field(2, axis=[0, 1, 2])
+    mock.field_2 = galmap_rg
+    mock.weights_field_2 = dndz_box
+    mock.weights_grid_2 = ((dndz_box > 0) * mock.counts_in_box).astype("float")  # test
+    mock.apply_taper_to_field(2, axis=[0, 1, 2])
 
-        phi_arr = (mock.auto_power_3d_1)
-        pgal_arr = (mock.auto_power_3d_2)
-        phixgal_arr = (mock.cross_power_3d)
-        return phi_arr, pgal_arr, phixgal_arr, mock.k_mode
+    phi_arr = mock.auto_power_3d_1
+    pgal_arr = mock.auto_power_3d_2
+    phixgal_arr = mock.cross_power_3d
+    return phi_arr, pgal_arr, phixgal_arr, mock.k_mode
+
 
 if __name__ == "__main__":
     comm = MPI.COMM_WORLD
@@ -83,8 +92,7 @@ if __name__ == "__main__":
     # Initialize logger
     logger = _prepare_logging(rank)
 
-
-    if rank==0:
+    if rank == 0:
         Nreal = 4
         seeds = [0, 4, 0, 4]
 
@@ -146,8 +154,8 @@ if __name__ == "__main__":
             mean_amp_1="average_hi_temp",
             omega_hi=5e-4,
             sigma_beam_ch=sigma_beam_new,
-            sigma_v_1= 100, # in velocity units
-            sigma_v_2= 100,
+            sigma_v_1=100,  # in velocity units
+            sigma_v_2=100,
         )
         results = get_powerspectra(mock, 4, logger)
         np.savez(
@@ -180,10 +188,9 @@ if __name__ == "__main__":
             mean_amp_1="average_hi_temp",
             omega_hi=5e-4,
             sigma_beam_ch=sigma_beam_new,
-            sigma_v_1= 100, # in velocity units
-            sigma_v_2= 100,
+            sigma_v_1=100,  # in velocity units
+            sigma_v_2=100,
         )
-
 
         tinit = time()
         logger.debug(f"time for initialisation {tinit - tstart}")
@@ -201,7 +208,7 @@ if __name__ == "__main__":
             elif tag == TAG_TASK:
                 results = get_powerspectra(mock, task, logger)
                 comm.send(
-                    results, dest=0, tag=TAG_DONE,
+                    results,
+                    dest=0,
+                    tag=TAG_DONE,
                 )
-
-

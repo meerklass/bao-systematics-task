@@ -1,6 +1,9 @@
 import sys
+import os
 
-sys.path.append("../")
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "src")
+)
 
 from multiprocessing import Pool
 
@@ -8,6 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.signal.windows as windows
 from astropy.cosmology import Planck18
+
 # project to sky coordinates and back
 from meer21cm import MockSimulation
 from meer21cm.grid import shot_noise_correction_from_gridding
@@ -73,7 +77,7 @@ def get_3d_power(seed):
     mock.include_beam = [True, False]
     mock.field_2 = galmap_rg
     mock.weights_field_2 = dndz_box
-    mock.weights_grid_2 = ((dndz_box>0)*mock.counts_in_box).astype('float')
+    mock.weights_grid_2 = ((dndz_box > 0) * mock.counts_in_box).astype("float")
     # mock.weights_grid_2 = ((dndz_box * mock.counts_in_box) > 0).astype("float")
     mock.apply_taper_to_field(2, axis=[0, 1, 2])
     shot_noise = get_shot_noise_galaxy(

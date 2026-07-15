@@ -1,6 +1,9 @@
 import sys
+import os
 
-sys.path.append("../")
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "src")
+)
 
 import logging
 import os
@@ -25,11 +28,10 @@ from specs import *
 # Setup logger
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler(sys.stdout)
-handler.setFormatter(
-    logging.Formatter("[%(levelname)s] %(message)s")
-)
+handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
 logger.addHandler(handler)
 logger.setLevel(logging.DEBUG)
+
 
 def get_power(seed):
     logger.debug(f"seed {seed}")
@@ -47,13 +49,13 @@ def get_power(seed):
         nu=nu_arr,
         discrete_source_dndz=z_func,
         seed=seed,
-        tracer_bias_2=1.5, # Compute power spectrum in units of b_1 b_2 etc.
+        tracer_bias_2=1.5,  # Compute power spectrum in units of b_1 b_2 etc.
         tracer_bias_1=1.5,
         mean_amp_1="average_hi_temp",
         omega_hi=5e-4,
         # sigma_beam_ch=sigma_beam_ch,
-        sigma_v_1= 100,
-        sigma_v_2= 100,
+        sigma_v_1=100,
+        sigma_v_2=100,
     )
     comov_dist = Planck18.comoving_distance(mock.z_ch).value
     sigma_beam_new = 1 / comov_dist * sigma_beam_ch
@@ -97,20 +99,15 @@ def get_power(seed):
 
     mock.field_2 = galmap_rg
     mock.weights_field_2 = dndz_box
-    mock.weights_grid_2 = ((dndz_box>0)*mock.counts_in_box).astype('float')
+    mock.weights_grid_2 = ((dndz_box > 0) * mock.counts_in_box).astype("float")
     mock.apply_taper_to_field(2, axis=[0, 1, 2])
 
-    shot_noise = (
-        get_shot_noise_galaxy(
-            galmap_rg,
-            mock.box_len,
-            mock.weights_grid_2,
-            mock.weights_field_2,
-        )
-        * shot_noise_correction_from_gridding(
-            mock.box_ndim, mock.grid_scheme
-        )
-    )
+    shot_noise = get_shot_noise_galaxy(
+        galmap_rg,
+        mock.box_len,
+        mock.weights_grid_2,
+        mock.weights_field_2,
+    ) * shot_noise_correction_from_gridding(mock.box_ndim, mock.grid_scheme)
     phi_3d = mock.auto_power_3d_1
     phi_3d_model = mock.auto_power_tracer_1_model
 
@@ -130,14 +127,17 @@ def get_power(seed):
         phixgal_3d_model,
     )
 
+
 if __name__ == "__main__":
     # run the simulations
-    n_cpus = int(os.environ.get("SLURM_CPUS_PER_TASK", 1)) # Assumes that Slurm is used for tasking
+    n_cpus = int(
+        os.environ.get("SLURM_CPUS_PER_TASK", 1)
+    )  # Assumes that Slurm is used for tasking
     logger.info(f"Number of cpus used = {n_cpus}")
 
     scaling = 2
     os.environ["OMP_NUM_THREADS"] = str(scaling)
-    squeezed_cpus = int(n_cpus//scaling)
+    squeezed_cpus = int(n_cpus // scaling)
 
     Nreal = 32
     logger.info(f"Number of realisations = {Nreal}")
@@ -146,7 +146,9 @@ if __name__ == "__main__":
 
     tstart = time()
     with Pool(squeezed_cpus) as p:
-        for kmode, phi, pgal, phixgal, phi_mod, pgal_mod, phixgal_mod in p.map(get_power, range(Nreal)):
+        for kmode, phi, pgal, phixgal, phi_mod, pgal_mod, phixgal_mod in p.map(
+            get_power, range(Nreal)
+        ):
             phi_arr.append(phi)
             pgal_arr.append(pgal)
             phixgal_arr.append(phixgal)
