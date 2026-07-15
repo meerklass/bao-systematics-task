@@ -10,6 +10,7 @@ from scipy.interpolate import interp1d
 from mpi4py import MPI
 
 from meer21cm import MockSimulation
+
 sys.path.append("../specs")
 from specs_v2 import *
 
@@ -17,19 +18,23 @@ TAG_TASK = 1
 TAG_DONE = 2
 TAG_TERMINATE = 3
 
+
 def _prepare_logging(rank):
     logger = logging.getLogger(f"rank{rank}")
     handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter(f"[Rank {rank:02d} %(levelname)s] %(message)s"))
+    handler.setFormatter(
+        logging.Formatter(f"[Rank {rank:02d} %(levelname)s] %(message)s")
+    )
     logger.addHandler(handler)
     logger.setLevel(logging.DEBUG)
     return logger
+
 
 def get_powerspectra(mock, seed, logger):
     tstart = time()
 
     mock.data = None
-    mock.W_HI = hit_counts_hp>0
+    mock.W_HI = hit_counts_hp > 0
     mock.w_HI = hit_counts_hp
 
     mock.downres_factor_transverse = sim_upres_transverse
@@ -42,11 +47,11 @@ def get_powerspectra(mock, seed, logger):
     num_gal = int(mock.survey_volume * n_gal)
     mock.num_discrete_source = num_gal
     mock.taper_func = getattr(windows, window_name)
-    num_pix = mock.W_HI[:,0].sum()
+    num_pix = mock.W_HI[:, 0].sum()
     logger.debug(num_pix)
 
     # randomly generate frequency dependend noise
-    generator = np.random.default_rng(seed=seed+50) # this 50 means nothing
+    generator = np.random.default_rng(seed=seed + 50)  # this 50 means nothing
     noise_realisation = sigma_N(num_pix) * generator.normal(size=mock.W_HI.shape)
 
     hi_map_raw = mock.mock_tracer_field_1
@@ -71,6 +76,7 @@ def get_powerspectra(mock, seed, logger):
 
     return (hi_map_raw, hi_map, hi_noise_map, hi_map_post, hi_map_rg, phi)
 
+
 if __name__ == "__main__":
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
@@ -82,7 +88,7 @@ if __name__ == "__main__":
     ##########
     # Tasker #
     ##########
-    if rank==0:
+    if rank == 0:
         Nreal = 2
         seeds = (np.ones(Nreal) * 42).astype(int)
 
@@ -114,19 +120,19 @@ if __name__ == "__main__":
 
         np.savez(
             "../data/map_data_hp_same_seed_nofg.npz",
-            hi_map_raw_1 = map_data[0][0],
-            hi_map_1 = map_data[0][1],
-            hi_noise_map_1 = map_data[0][2],
-            hi_map_post_1 = map_data[0][3],
-            hi_map_rg_1 = map_data[0][4],
-            hi_map_raw_2 = map_data[1][0],
-            hi_map_2 = map_data[1][1],
-            hi_noise_map_2 = map_data[1][2],
-            hi_map_post_2 = map_data[1][3],
-            hi_map_rg_2 = map_data[1][4],
-            phi_1 = map_data[0][5],
-            phi_2 = map_data[1][5],
-         )
+            hi_map_raw_1=map_data[0][0],
+            hi_map_1=map_data[0][1],
+            hi_noise_map_1=map_data[0][2],
+            hi_map_post_1=map_data[0][3],
+            hi_map_rg_1=map_data[0][4],
+            hi_map_raw_2=map_data[1][0],
+            hi_map_2=map_data[1][1],
+            hi_noise_map_2=map_data[1][2],
+            hi_map_post_2=map_data[1][3],
+            hi_map_rg_2=map_data[1][4],
+            phi_1=map_data[0][5],
+            phi_2=map_data[1][5],
+        )
 
     ##########
     # Worker #
@@ -140,8 +146,8 @@ if __name__ == "__main__":
         mock = MockSimulation(
             hp_nside=128,
             nu=nu_arr,
-            ra_range = ra_range,
-            dec_range = dec_range,
+            ra_range=ra_range,
+            dec_range=dec_range,
             seed=0,
             downres_factor_radial=sim_upres_radial,
             downres_factor_transverse=sim_upres_transverse,
@@ -149,18 +155,18 @@ if __name__ == "__main__":
             discrete_source_dndz=z_func,
             tracer_bias_2=1.5,
             tracer_bias_1=1.5,
-            sigma_v_1= 100, # in velocity units
-            sigma_v_2= 100,
+            sigma_v_1=100,  # in velocity units
+            sigma_v_2=100,
             mean_amp_1="average_hi_temp",
             omega_hi=5e-4,
             sigma_beam_ch=sigma_beam_new,
         )
         mock.data = fg_map.copy()
-        mock.W_HI = np.ones_like(hit_counts_hp>0)
+        mock.W_HI = np.ones_like(hit_counts_hp > 0)
         mock.w_HI = np.ones_like(hit_counts_hp)
         mock.sigma_beam_ch = dish_beam_sigma(13.5, mock.nu)
 
-        mock.data,_ = mock.convolve_data(assign_to_self=False)
+        mock.data, _ = mock.convolve_data(assign_to_self=False)
         mock.trim_map_to_range()
         fg_map_beam = mock.data.copy()
         logger.debug(fg_map_beam.shape)
@@ -183,6 +189,7 @@ if __name__ == "__main__":
             elif tag == TAG_TASK:
                 results = get_powerspectra(mock, task, logger)
                 comm.send(
-                    results, dest=0, tag=TAG_DONE,
+                    results,
+                    dest=0,
+                    tag=TAG_DONE,
                 )
-

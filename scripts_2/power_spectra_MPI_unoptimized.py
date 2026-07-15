@@ -10,6 +10,7 @@ from scipy.interpolate import interp1d
 from mpi4py import MPI
 
 from meer21cm import MockSimulation
+
 sys.path.append("../specs")
 from specs_v2 import *
 
@@ -17,21 +18,25 @@ TAG_TASK = 1
 TAG_DONE = 2
 TAG_TERMINATE = 3
 
+
 def _prepare_logging(rank):
     logger = logging.getLogger(f"rank{rank}")
     handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter(f"[Rank {rank:02d} %(levelname)s] %(message)s"))
+    handler.setFormatter(
+        logging.Formatter(f"[Rank {rank:02d} %(levelname)s] %(message)s")
+    )
     logger.addHandler(handler)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     return logger
+
 
 def get_powerspectra(seed, logger):
     logger.debug(f"seed {seed}")
     mock = MockSimulation(
         hp_nside=128,
         nu=nu_arr,
-        ra_range = ra_range,
-        dec_range = dec_range,
+        ra_range=ra_range,
+        dec_range=dec_range,
         seed=seed,
         downres_factor_radial=sim_upres_radial,
         downres_factor_transverse=sim_upres_transverse,
@@ -39,8 +44,8 @@ def get_powerspectra(seed, logger):
         discrete_source_dndz=z_func,
         tracer_bias_2=1.5,
         tracer_bias_1=1.5,
-        sigma_v_1= 100, # in velocity units
-        sigma_v_2= 100,
+        sigma_v_1=100,  # in velocity units
+        sigma_v_2=100,
         mean_amp_1="average_hi_temp",
         omega_hi=5e-4,
         sigma_beam_ch=sigma_beam_new,
@@ -48,17 +53,17 @@ def get_powerspectra(seed, logger):
     mock.sigma_beam_ch = dish_beam_sigma(13.5, mock.nu)
     tstart = time()
 
-    mock.W_HI = hit_counts_hp>0
+    mock.W_HI = hit_counts_hp > 0
     mock.w_HI = hit_counts_hp
     mock.get_enclosing_box()
 
     num_gal = int(mock.survey_volume * n_gal)
     mock.num_discrete_source = num_gal
     mock.taper_func = getattr(windows, window_name)
-    num_pix = mock.W_HI[:,0].sum()
+    num_pix = mock.W_HI[:, 0].sum()
 
     # randomly generate frequency dependend noise
-    generator = np.random.default_rng(seed=seed+50) # this 50 means nothing
+    generator = np.random.default_rng(seed=seed + 50)  # this 50 means nothing
 
     hi_signal_map = mock.propagate_mock_field_to_data(mock.mock_tracer_field_1)
     noise_realisation = sigma_N(num_pix) * generator.normal(size=mock.W_HI.shape)
@@ -74,7 +79,7 @@ def get_powerspectra(seed, logger):
     # resore window
     mock.grid_scheme = "cic"
     mock.downres_factor_transverse = 1.5
-    mock.downres_factor_radial = 3
+    mock.downres_factor_radial = 1
     mock.get_enclosing_box()
 
     tgen = time()
@@ -95,7 +100,7 @@ def get_powerspectra(seed, logger):
 
     mock.field_2 = galmap_rg
     mock.weights_field_2 = dndz_box
-    mock.weights_grid_2 = ((dndz_box>0)*mock.counts_in_box).astype('float')
+    mock.weights_grid_2 = ((dndz_box > 0) * mock.counts_in_box).astype("float")
     mock.apply_taper_to_field(2, axis=[0, 1, 2])
 
     phi = mock.auto_power_3d_1
@@ -109,7 +114,11 @@ def get_powerspectra(seed, logger):
     # Cleaned map #
     ###############
     cov_tot, _, eival, eigvec = pca_clean(
-        tot_map, 1, weights=mock.W_HI, return_analysis=True, mean_center=True,
+        tot_map,
+        1,
+        weights=mock.W_HI,
+        return_analysis=True,
+        mean_center=True,
     )
     res_map, A_mat = pca_clean(
         tot_map,
@@ -121,7 +130,7 @@ def get_powerspectra(seed, logger):
         ignore_nan=True,
     )
     R_mat = np.eye(mock.nu.size) - A_mat @ A_mat.T
-    R_mat = np.nan_to_num(R_mat) # Use for Noise map, also save
+    R_mat = np.nan_to_num(R_mat)  # Use for Noise map, also save
     mock.data = res_map
     himap_rg, _, _ = mock.grid_data_to_field()
 
@@ -131,11 +140,10 @@ def get_powerspectra(seed, logger):
 
     mock.field_2 = galmap_rg
     mock.weights_field_2 = dndz_box
-    mock.weights_grid_2 = ((dndz_box>0)*mock.counts_in_box).astype('float') # test
+    mock.weights_grid_2 = ((dndz_box > 0) * mock.counts_in_box).astype("float")  # test
     mock.apply_taper_to_field(2, axis=[0, 1, 2])
 
     phi_cleaned = mock.auto_power_3d_1
-    pgal_cleaned = mock.auto_power_3d_2
     phixgal_cleaned = mock.cross_power_3d
 
     tpca = time()
@@ -152,7 +160,7 @@ def get_powerspectra(seed, logger):
 
     mock.field_2 = galmap_rg
     mock.weights_field_2 = dndz_box
-    mock.weights_grid_2 = ((dndz_box>0)*mock.counts_in_box).astype('float') # test
+    mock.weights_grid_2 = ((dndz_box > 0) * mock.counts_in_box).astype("float")  # test
     mock.apply_taper_to_field(2, axis=[0, 1, 2])
 
     pnoise = mock.auto_power_3d_1
@@ -170,18 +178,26 @@ def get_powerspectra(seed, logger):
 
     mock.field_2 = galmap_rg
     mock.weights_field_2 = dndz_box
-    mock.weights_grid_2 = ((dndz_box>0)*mock.counts_in_box).astype('float') # test
+    mock.weights_grid_2 = ((dndz_box > 0) * mock.counts_in_box).astype("float")  # test
     mock.apply_taper_to_field(2, axis=[0, 1, 2])
 
     pnoise_cleaned = mock.auto_power_3d_1
     pnoisexgal_cleaned = mock.cross_power_3d
     logger.info(f"Time for Pks {tpca - tstart}")
     return (
-        phi, pgal, phixgal,
-        phi_cleaned, pgal_cleaned, phixgal_cleaned,
-        pnoise, pnoisexgal, pnoise_cleaned, pnoisexgal_cleaned,
-        mock.kmode, R_mat
+        phi,
+        pgal,
+        phixgal,
+        phi_cleaned,
+        phixgal_cleaned,
+        pnoise,
+        pnoisexgal,
+        pnoise_cleaned,
+        pnoisexgal_cleaned,
+        mock.kmode,
+        R_mat,
     )
+
 
 if __name__ == "__main__":
     comm = MPI.COMM_WORLD
@@ -194,17 +210,23 @@ if __name__ == "__main__":
     ##########
     # Tasker #
     ##########
-    if rank==0:
-        Nreal = 28
-        seeds = np.arange(Nreal)
+    if rank == 0:
+        Nreal = 300
+        seeds = np.arange(0, Nreal)
 
         num_workers_done = 0
         next_task = 0
 
         logger.info(f"Number of realisations = {Nreal}")
-        phi_arr, pgal_arr, phixgal_arr = [], [], []
-        phi_cleaned_arr, pgal_cleaned_arr, phixgal_cleaned_arr = [], [], []
-        pnoise_arr, pnoisexgal_arr, pnoise_cleaned_arr, pnoisexgal_cleaned_arr = [], [], [], []
+        phi_arr = []
+        pgal_arr = []
+        phixgal_arr = []
+        phi_cleaned_arr = []
+        phixgal_cleaned_arr = []
+        pnoise_arr = []
+        pnoisexgal_arr = []
+        pnoise_cleaned_arr = []
+        pnoisexgal_cleaned_arr = []
         R_mat_arr = []
         while num_workers_done < size - 1:
             status = MPI.Status()
@@ -223,21 +245,19 @@ if __name__ == "__main__":
                 pgal_arr.append(data[1])
                 phixgal_arr.append(data[2])
                 phi_cleaned_arr.append(data[3])
-                pgal_cleaned_arr.append(data[4])
-                phixgal_cleaned_arr.append(data[5])
-                pnoise_arr.append(data[6])
-                pnoisexgal_arr.append(data[7])
-                pnoise_cleaned_arr.append(data[8])
-                pnoisexgal_cleaned_arr.append(data[9])
-                kmode = data[10]
-                R_mat_arr.append(data[11])
+                phixgal_cleaned_arr.append(data[4])
+                pnoise_arr.append(data[5])
+                pnoisexgal_arr.append(data[6])
+                pnoise_cleaned_arr.append(data[7])
+                pnoisexgal_cleaned_arr.append(data[8])
+                kmode = data[9]
+                R_mat_arr.append(data[10])
             elif tag == TAG_TERMINATE:
                 num_workers_done += 1
         phi_arr = np.array(phi_arr)
         pgal_arr = np.array(pgal_arr)
         phixgal_arr = np.array(phixgal_arr)
         phi_cleaned_arr = np.array(phi_cleaned_arr)
-        pgal_cleaned_arr = np.array(pgal_cleaned_arr)
         phixgal_cleaned_arr = np.array(phixgal_cleaned_arr)
         pnoise_arr = np.array(pnoise_arr)
         pnoisexgal_arr = np.array(pnoisexgal_arr)
@@ -246,14 +266,13 @@ if __name__ == "__main__":
         R_mat_arr = np.array(R_mat_arr)
 
         np.savez(
-            "../data/power_spectra_hp_with_pca_few.npz",
+            "../data/power_spectra_hp_with_pca_batch1.npz",
             kmode=kmode,
             R_mat=R_mat_arr,
             phi=phi_arr,
             pgal=pgal_arr,
             phixgal=phixgal_arr,
             phi_cleaned=phi_cleaned_arr,
-            pgal_cleaned=pgal_cleaned_arr,
             phixgal_cleaned=phixgal_cleaned_arr,
             pnoise=pnoise_arr,
             pnoisexgal=pnoisexgal_arr,
@@ -274,8 +293,8 @@ if __name__ == "__main__":
         mock = MockSimulation(
             hp_nside=128,
             nu=nu_arr,
-            ra_range = ra_range,
-            dec_range = dec_range,
+            ra_range=ra_range,
+            dec_range=dec_range,
             seed=0,
             downres_factor_radial=sim_upres_radial,
             downres_factor_transverse=sim_upres_transverse,
@@ -283,18 +302,18 @@ if __name__ == "__main__":
             discrete_source_dndz=z_func,
             tracer_bias_2=1.5,
             tracer_bias_1=1.5,
-            sigma_v_1= 100, # in velocity units
-            sigma_v_2= 100,
+            sigma_v_1=100,  # in velocity units
+            sigma_v_2=100,
             mean_amp_1="average_hi_temp",
             omega_hi=5e-4,
             sigma_beam_ch=sigma_beam_new,
         )
         mock.data = fg_map.copy()
-        mock.W_HI = np.ones_like(hit_counts_hp>0)
+        mock.W_HI = np.ones_like(hit_counts_hp > 0)
         mock.w_HI = np.ones_like(hit_counts_hp)
         mock.sigma_beam_ch = dish_beam_sigma(13.5, mock.nu)
 
-        mock.data,_ = mock.convolve_data(assign_to_self=False)
+        mock.data, _ = mock.convolve_data(assign_to_self=False)
         mock.trim_map_to_range()
         fg_map_beam = mock.data.copy()
 
@@ -317,7 +336,7 @@ if __name__ == "__main__":
             elif tag == TAG_TASK:
                 results = get_powerspectra(task, logger)
                 comm.send(
-                    results, dest=0, tag=TAG_DONE,
+                    results,
+                    dest=0,
+                    tag=TAG_DONE,
                 )
-
-
