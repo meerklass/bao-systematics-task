@@ -1,4 +1,5 @@
 import os
+import sys
 from multiprocessing import Pool
 
 from astropy.cosmology import Planck18
@@ -19,17 +20,28 @@ from meer21cm.util import create_wcs, redshift_to_freq, freq_to_redshift
 from meer21cm.util import pca_clean
 from meer21cm.util import _map_los_matrix_form as map_los_matrix_form
 
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src")
+)
 from utils import add_boundary_knots
 
 window_name = "blackmanharris"
+
 dndz_file = "../specs/LRGELG_dndz.npz"
+nu_arr_file = '../specs/nu_arr.npy'
+fg_map_file = '../specs/fg_map_wcs.npy'
+hit_counts_hp_file = '../specs/hit_counts_hp.npy'
+
+nu_arr = np.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), nu_arr_file))
+fg_map = np.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), fg_map_file))
+hit_counts_hp = np.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), hit_counts_hp_file))
+dndz_data = np.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), dndz_file))
 
 z_min = 0.4
 z_max = 1.1
 nu_min = redshift_to_freq(z_max)
 nu_max = redshift_to_freq(z_min)
 
-dndz_data = np.load(dndz_file)
 z_bin = dndz_data["z_bin"]
 z_count = dndz_data["z_count"]
 z_cen = (z_bin[:-1] + z_bin[1:]) / 2
@@ -126,11 +138,7 @@ def generate_mock_healpix(nu=None,hit_counts_hp=None):
 #np.save('nu_arr',nu_arr)
 #np.save('hit_counts_hp',hit_counts_hp)
 
-nu_arr = np.load('../specs/nu_arr.npy')
 nu_resol = np.diff(nu_arr).mean()
-
-fg_map = np.load('../specs/fg_map_wcs.npy')
-hit_counts_hp = np.load('../specs/hit_counts_hp.npy')
 fg_map = fg_map[generate_mock_healpix(nu_arr, hit_counts_hp).pixel_id]
 
 #######################

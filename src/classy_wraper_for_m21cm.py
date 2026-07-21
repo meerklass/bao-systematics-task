@@ -1,3 +1,6 @@
+import sys
+import os
+
 import numpy as np
 from astropy import units as u
 from astropy.cosmology import Planck18
@@ -6,6 +9,9 @@ from scipy.interpolate import CubicSpline, UnivariateSpline
 from scipy.signal import find_peaks
 from scipy.special import roots_legendre, legendre
 
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src")
+)
 from utils import add_boundary_knots
 
 """

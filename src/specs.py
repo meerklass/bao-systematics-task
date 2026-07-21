@@ -1,4 +1,5 @@
 import os
+import sys
 
 # specifications for the simulation
 import astropy.units as u
@@ -9,6 +10,9 @@ from meer21cm.telescope import dish_beam_sigma
 from meer21cm.util import create_wcs, freq_to_redshift, redshift_to_freq
 from scipy.interpolate import CubicSpline
 
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src")
+)
 from utils import add_boundary_knots
 
 num_pix_x = 120
