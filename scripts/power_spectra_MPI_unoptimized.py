@@ -4,6 +4,7 @@ import os
 import sys
 from time import time
 
+import argparse
 import numpy as np
 import scipy.signal.windows as windows
 from scipy.interpolate import interp1d
@@ -202,6 +203,31 @@ def get_powerspectra(seed, logger):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Run power spectra simulations with MPI"
+    )
+    parser.add_argument(
+        "--start-seed",
+        type=int,
+        default=0,
+        help="Starting seed for the simulation batch (default: 0)",
+    )
+    parser.add_argument(
+        "--n-real",
+        type=int,
+        default=105,
+        help="Number of realizations to run (default: 105)",
+    )
+    parser.add_argument(
+        "--prefix",
+        type=str,
+        default="default",
+        help="Root name for the output file (saved as {prefix}_power_spectrum.npz in the data directory)",
+    )
+    args = parser.parse_args()
+    data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
+    output_path = os.path.join(data_dir, f"{args.prefix}_power_spectrum.npz")
+
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
@@ -213,8 +239,8 @@ if __name__ == "__main__":
     # Tasker #
     ##########
     if rank == 0:
-        Nreal = 322
-        seeds = np.arange(0, Nreal)
+        Nreal = args.n_real
+        seeds = np.arange(args.start_seed, args.start_seed + args.n_real)
 
         num_workers_done = 0
         next_task = 0
@@ -268,7 +294,7 @@ if __name__ == "__main__":
         R_mat_arr = np.array(R_mat_arr)
 
         np.savez(
-            "../data/power_spectra_hp_with_pca_noisev2_batch1.npz",
+            output_path,
             kmode=kmode,
             R_mat=R_mat_arr,
             phi=phi_arr,
