@@ -162,16 +162,14 @@ TSYS_OVER_ETA_K = np.array([36.75302245250432, 35.673575129533674, 34.9827288428
 tsys_inter = CubicSpline(NU_MHZ, TSYS_OVER_ETA_K, bc_type="natural")
 add_boundary_knots(tsys_inter)
 
-def sigma_N(num_pix):
+def sigma_N(hit_counts):
     nu = nu_arr * u.Hz
     dnu = nu_resol * u.Hz
 
     tsys_over_eta = tsys_inter(nu.to(u.MHz).value) * u.K
-
-    t_tot = 20 * u.hr
-    n_dish = 64
+    t_pixel = hit_counts * 2 * u.s
+    t_pixel = np.maximum(t_pixel, 1e-6 * u.s)
     n_feeds = 2
-    t_pixel = n_dish * t_tot / num_pix
 
     return tsys_over_eta / np.sqrt(n_feeds * (dnu * t_pixel).to(1).value)
 

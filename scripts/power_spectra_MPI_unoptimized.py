@@ -68,7 +68,7 @@ def get_powerspectra(seed, logger):
     generator = np.random.default_rng(seed=seed + 50)  # this 50 means nothing
 
     hi_signal_map = mock.propagate_mock_field_to_data(mock.mock_tracer_field_1)
-    noise_realisation = sigma_N(num_pix) * generator.normal(size=mock.W_HI.shape)
+    noise_realisation = sigma_N(hit_counts_hp) * generator.normal(size=mock.W_HI.shape)
     mock.data = hi_signal_map + noise_realisation.value
 
     mock.propagate_mock_tracer_to_gal_cat()
@@ -213,7 +213,7 @@ if __name__ == "__main__":
     # Tasker #
     ##########
     if rank == 0:
-        Nreal = 300
+        Nreal = 322
         seeds = np.arange(0, Nreal)
 
         num_workers_done = 0
@@ -268,7 +268,7 @@ if __name__ == "__main__":
         R_mat_arr = np.array(R_mat_arr)
 
         np.savez(
-            "../data/power_spectra_hp_with_pca_batch1.npz",
+            "../data/power_spectra_hp_with_pca_noisev2_batch1.npz",
             kmode=kmode,
             R_mat=R_mat_arr,
             phi=phi_arr,

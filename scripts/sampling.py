@@ -4,7 +4,7 @@ import sys
 from time import time
 
 import corner
-import niceplots
+# import niceplots
 import numpy as np
 import seaborn as sns
 from nautilus import Prior, Sampler
@@ -20,16 +20,19 @@ sys.path.insert(
 from classy_wraper_for_m21cm import *
 from specs_v2 import *
 
+from mpi4py.futures import MPIPoolExecutor
+os.environ["OMP_NUM_THREADS"] = "16"
+
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
 logger.addHandler(handler)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 Cs = sns.color_palette("colorblind")
-niceplots.initPlot()
+# niceplots.initPlot()
 
-sims_file = "/home/sefa/Desktop/projects/meerklass/get_fg_reduction/power_spectra_hp_with_pca_batch1.npz"
+sims_file = "/gpfs/users/pamuks/meerklass/bao-systematics-task/data/power_spectra_hp_with_pca_batch1.npz"
 
 ###################
 # Get mock object #
@@ -227,8 +230,8 @@ _t0 = time()
 classcosmo = Class_cosmo_model({})
 
 fid_BAO = {
-    "alpha_Iso": 1,
-    "alpha_AP": 1,
+    "alpha_perp": 1,
+    "alpha_parr": 1,
     "sigma_p": 1.6,  # Mpc
     "sigma_v": 1.6,  # Mpc
     "bias": 1.5,
@@ -269,10 +272,11 @@ def get_model(params):
 
     if "beamfac" in ps:
         mock.sigma_beam_ch = fid_beam * ps.pop("beamfac")
+    beam_attenuation = mock.beam_attenuation()
 
     baopars = fid_BAO.copy()
     baopars.update(ps)
-    ps_obj = power_spectrum_from_baopars(classcosmo, baopars)
+    ps_obj = power_spectrum_from_baopars(classcosmo, baopars, desi_like_bao=True)
 
     phixgal = np.zeros_like(k)
     phixgal[~(k==0)] = ps_obj.powerspectrum(k[~(k==0)], mu[~(k==0)], mock.z, which="both")[1, ...]
@@ -315,7 +319,7 @@ def loglike(params):
 
 def logpost(params):
     return loglike(params) + logprior(params)
-    
+
 
 ###########
 # Sampler #
@@ -325,31 +329,40 @@ _t0 = time()
 
 prior = Prior()
 prior.add_parameter("bias", (0.1, 10))
-prior.add_parameter("bias_2", (0.1, 5))
-prior.add_parameter("alpha_Iso", (0.01, 10))
+prior.add_parameter("bias_2", (0.01, 3))
+prior.add_parameter("alpha_parr", (0.01, 10))
+prior.add_parameter("alpha_perp", (0.01, 10))
 prior.add_parameter("beamfac", (0.5, 1.5))
-prior.add_parameter("sigma_p", (0.01, 15))
+# prior.add_parameter("sigma_p", (0.01, 15))
 
-sampler = Sampler(prior, logpost, n_live=1000, filepath="../data/chain_v2_desi_like_fg.hdf5")
+if __name__ == "__main__":
+    sampler = Sampler(
+        prior,
+        logpost,
+        n_live=1000,
+        pool=MPIPoolExecutor(),
+        filepath="../data/chain_v3_desi_like_fg.hdf5",
+    )
+    sampler.run()
 
-logger.debug(f"Sampler finished in {time() - _t0:.2f}s")
+    logger.debug(f"Sampler finished in {time() - _t0:.2f}s")
 
-############
-# Plotting #
-############
-logger.info("Starting Plotting...")
-_t0 = time()
+    ############
+    # Plotting #
+    ############
+    logger.info("Starting Plotting...")
+    _t0 = time()
 
-points, log_w, log_l = sampler.posterior()
-fig = corner.corner(
-    points,
-    weights=np.exp(log_w),
-    bins=20,
-    labels=prior.keys,
-    color="purple",
-    plot_datapoints=False,
-    range=np.repeat(0.999, len(prior.keys)),
-)
-fig.savefig("../data/chain_v2_desi_like_fg.png", dpi=300, bbox_inches="tight")
+    points, log_w, log_l = sampler.posterior()
+    fig = corner.corner(
+        points,
+        weights=np.exp(log_w),
+        bins=20,
+        labels=prior.keys,
+        color="purple",
+        plot_datapoints=False,
+        range=np.repeat(0.999, len(prior.keys)),
+    )
+    fig.savefig("../data/chain_v3_desi_like_fg.png", dpi=300, bbox_inches="tight")
 
-logger.debug(f"Plotting finished in {time() - _t0:.2f}s")
+    logger.debug(f"Plotting finished in {time() - _t0:.2f}s")
